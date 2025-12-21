@@ -1,31 +1,44 @@
-import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View } from "react-native";
-import { auth, db } from "./src/services/firebase";
+import React, { useState, useEffect } from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "./src/services/firebase";
+
+import LoginScreen from "./src/screens/auth/LoginScreen.js";
+import RegisterScreen from "./src/screens/auth/RegisterScreen.js";
+import HomeScreen from "./src/screens/home/HomeScreen.js";
+
+const Stack = createNativeStackNavigator();
 
 export default function App() {
-  // Test if Firebase is initialized
-  console.log("Firebase Auth:", auth);
-  console.log("Firebase Firestore:", db);
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return unsubscribe;
+  }, []);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>WalletSync</Text>
-      <Text>Firebase Connected.</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      {user ? (
+        <Stack.Navigator>
+          <Stack.Screen name="Home" component={HomeScreen} />
+        </Stack.Navigator>
+      ) : (
+        <Stack.Navigator>
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Register"
+            component={RegisterScreen}
+            options={{ headerShown: false }}
+          />
+        </Stack.Navigator>
+      )}
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  text: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-});
