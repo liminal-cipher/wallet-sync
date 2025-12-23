@@ -4,9 +4,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./src/services/firebase";
 
-import LoginScreen from "./src/screens/auth/LoginScreen.js";
-import RegisterScreen from "./src/screens/auth/RegisterScreen.js";
-import HomeScreen from "./src/screens/home/HomeScreen.js";
+import LoginScreen from "./src/screens/auth/LoginScreen";
+import RegisterScreen from "./src/screens/auth/RegisterScreen";
+import HomeScreen from "./src/screens/home/HomeScreen";
+import AddCouponScreen from "./src/screens/home/AddCouponScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -24,6 +25,13 @@ export default function App() {
       {user ? (
         <Stack.Navigator>
           <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen
+            name="AddCoupon"
+            component={AddCouponScreen}
+            options={{
+              headerShown: false,
+            }}
+          ></Stack.Screen>
         </Stack.Navigator>
       ) : (
         <Stack.Navigator>
