@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -15,9 +16,13 @@ export default function HomeScreen() {
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadCoupons();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadCoupons();
+    }, [])
+  );
+
+  const navigation = useNavigation();
 
   const loadCoupons = async () => {
     try {
@@ -50,9 +55,17 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Coupons</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => navigation.navigate("AddCoupon")}
+          >
+            <Text style={styles.addButtonText}>+ Add</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -92,6 +105,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
     marginTop: 10,
+  },
+  headerButtons: {
+    flexDirection: "row",
+    gap: 10,
   },
   title: {
     fontSize: 28,
@@ -142,5 +159,15 @@ const styles = StyleSheet.create({
     color: "#999",
     fontSize: 16,
     marginTop: 50,
+  },
+  addButton: {
+    backgroundColor: "#4A90E2",
+    padding: 10,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "bold",
   },
 });
