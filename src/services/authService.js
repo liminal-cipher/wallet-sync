@@ -4,7 +4,7 @@ import {
   signOut,
 } from "firebase/auth";
 
-import { auth } from "./firebase.js";
+import { auth } from "./firebase";
 
 export const signUpUser = async (email, password) => {
   try {
