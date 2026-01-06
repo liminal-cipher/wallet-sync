@@ -31,7 +31,9 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env
+.env.local
+.env.*.local
 
 # typescript
 *.tsbuildinfo
@@ -39,6 +41,3 @@ yarn-error.*
 # generated native folders
 /ios
 /android
-
-# keys
-src/services/firebaseConfig.js
