@@ -11,6 +11,7 @@ import {
 import { logoutUser } from "../../services/authService";
 
 import { fetchCoupons } from "../../services/firestoreService";
+import { auth } from "../../services/firebase";
 
 export default function HomeScreen() {
   const [coupons, setCoupons] = useState([]);
@@ -26,7 +27,7 @@ export default function HomeScreen() {
 
   const loadCoupons = async () => {
     try {
-      const data = await fetchCoupons();
+      const data = await fetchCoupons(auth.currentUser?.uid);
       setCoupons(data);
     } catch (error) {
       console.error(error);

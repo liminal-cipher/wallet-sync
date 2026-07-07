@@ -8,6 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { addCoupon } from "../../services/firestoreService";
+import { auth } from "../../services/firebase";
 
 export default function AddCouponScreen({ navigation }) {
   const [brand, setBrand] = useState("");
@@ -17,11 +18,11 @@ export default function AddCouponScreen({ navigation }) {
   );
 
   const handleSave = async () => {
-    if (!brand) {
+    if (!brand.trim()) {
       Alert.alert("Error", "Brand is required");
       return;
     }
-    if (!barcodeNumber) {
+    if (!barcodeNumber.trim()) {
       Alert.alert("Error", "Barcode number is required");
       return;
     }
@@ -31,11 +32,11 @@ export default function AddCouponScreen({ navigation }) {
     }
 
     const couponData = {
-      brand,
-      barcodeNumber,
+      brand: brand.trim(),
+      barcodeNumber: barcodeNumber.trim(),
       expiryDate,
       isUsed: false,
-      // userId: auth.currentUser.uid (later)
+      userId: auth.currentUser?.uid || "anonymous",
     };
 
     try {
