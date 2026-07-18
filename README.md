@@ -25,6 +25,24 @@ graph TD
     D -->|Real-time Sync| A
 ```
 
+### 📁 Project Structure
+```text
+wallet-sync/
+├── App.js                        # Root component, auth-based navigation
+├── src/
+│   ├── screens/
+│   │   ├── auth/                 # Login & Registration screens
+│   │   └── home/                 # Coupon list & Add form screens
+│   └── services/
+│       ├── firebase.js           # Firebase app initialization
+│       ├── authService.js        # Auth helpers (login, signup, logout)
+│       └── firestoreService.js   # Firestore CRUD operations
+```
+
+### 📱 Screens & Flow
+- **Auth Flow**: Login, Register
+- **App Flow**: Home (List view), Add Coupon (Form)
+
 ## 🛠️ Tech Stack & Decisions
 
 | Component | Choice | Why this over alternatives? |
@@ -35,6 +53,12 @@ graph TD
 
 ## 🚀 Quick Start (Setup)
 
+### 🔧 Firebase Console Setup
+1. Create a project in [Firebase Console](https://console.firebase.google.com/).
+2. Enable **Email/Password** authentication under *Authentication*.
+3. Create a **Firestore Database** and add a `coupons` collection.
+
+### 💻 Local Installation
 1. Prerequisites: Node.js (>= 20) and Expo CLI.
 2. Clone the repository and install dependencies:
    ```bash
