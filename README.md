@@ -12,7 +12,7 @@ Gift vouchers arrive as images in chat rooms and end up buried in the camera rol
 
 WalletSync treats a coupon as a record instead of a photo: it has a brand, a barcode, an expiry date, and a used-or-not state, and those are the four things the app is built around.
 
-## What it does
+## What It Does
 
 - Register and sign in with email and password, with the session restored on relaunch
 - Add a coupon with brand, barcode number, and expiry date
@@ -71,14 +71,14 @@ No performance or usage numbers have been measured. The app has been exercised b
 
 ## Getting Started
 
-### Firebase console setup
+### Firebase Console Setup
 
 1. Create a project in the [Firebase Console](https://console.firebase.google.com/).
 2. Enable **Email/Password** authentication under Authentication.
 3. Create a **Firestore Database** with a `coupons` collection.
 4. Add security rules restricting each document to its owner. This is not optional. Without it the `userId` filter is a client-side convention, not a boundary.
 
-### Local installation
+### Local Installation
 
 Prerequisites: Node.js 20 or later, and Expo CLI.
 
