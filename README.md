@@ -1,6 +1,6 @@
 # WalletSync
 
-> A cross-platform mobile coupon wallet that keeps gift vouchers and barcode coupons in one place and tracks how close they are to expiring.
+> A cross-platform coupon wallet that tracks voucher expiry dates and renders scannable barcodes.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Expo](https://img.shields.io/badge/Expo-React%20Native-000020?logo=expo&logoColor=white)
@@ -71,8 +71,8 @@ wallet-sync/
 | Framework | React Native (Expo) | One JS codebase reaches iOS, Android, and the browser, and Expo removes the native build step from a solo project |
 | Backend | Firebase | Auth and a hosted datastore without deploying or paying for a server |
 | Session persistence | AsyncStorage via `getReactNativePersistence` | React Native has no browser storage, so Firebase Auth needs an explicit persistence adapter or the user is logged out on every relaunch |
-| Notifications | `expo-notifications` | Scheduled local notifications trigger without requiring a custom push server or persistent backend worker |
-| Barcode scanning | `expo-camera` | Native camera barcode recognition handles retail barcodes client-side without third-party cloud OCR fees |
+| Notifications | `expo-notifications` (over remote push server) | Scheduled local notifications trigger on-device without requiring a custom push server or persistent backend worker |
+| Barcode scanning | `expo-camera` (over cloud OCR API) | Native camera barcode recognition handles retail barcodes client-side without third-party cloud OCR costs or network latency |
 | Sorting | In memory, after fetch | Sorting by expiry inside a `where("userId", ...)` query would require a Firestore composite index. At one user's coupon count, sorting client-side costs nothing and keeps setup to zero configuration |
 | Config | `EXPO_PUBLIC_*` environment variables | Firebase client config ships to the device by design, so the point is keeping project identifiers out of the repository, not keeping them secret |
 
@@ -127,7 +127,7 @@ npm run web    # browser, via react-native-web
 ## Roadmap
 
 - **On-device OCR extraction**: Text recognition model to automatically parse brand and expiry text from voucher screenshots alongside barcode numbers.
-- **Real-time Firestore sync**: Real-time snapshot listener for multi-device instant synchronisation.
+- **Real-time Firestore sync**: Real-time snapshot listener for multi-device instant synchronization.
 
 ## Status
 
