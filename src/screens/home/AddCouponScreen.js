@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { addCoupon } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
+import { scheduleCouponExpiryNotification } from "../../services/notificationService";
 
 export default function AddCouponScreen({ navigation }) {
   const [brand, setBrand] = useState("");
@@ -121,7 +122,8 @@ export default function AddCouponScreen({ navigation }) {
     };
 
     try {
-      await addCoupon(couponData);
+      const docRef = await addCoupon(couponData);
+      scheduleCouponExpiryNotification({ id: docRef.id, ...couponData });
       navigation.goBack();
     } catch (error) {
       Alert.alert("등록 실패", error.message || "쿠폰 저장 중 오류가 발생했습니다.");
