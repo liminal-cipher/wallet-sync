@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet, Text } from "react-native";
+import { View, StyleSheet, ScrollView } from "react-native";
 
 // Code 128 patterns (widths of alternating Bar / Space)
 const CODE128_PATTERNS = [
@@ -112,16 +112,12 @@ const CODE128_PATTERNS = [
   [2, 3, 3, 1, 1, 1, 2], // 106 (Stop)
 ];
 
-const encodeCode128B = (text) => {
+const encodeCode128B = (rawText) => {
+  const sanitized = String(rawText || "").replace(/[^\x20-\x7E]/g, "");
+
   const codes = [];
-  for (let i = 0; i < text.length; i++) {
-    const charCode = text.charCodeAt(i);
-    if (charCode >= 32 && charCode <= 126) {
-      codes.push(charCode - 32);
-    } else {
-      // Fallback for non-ASCII
-      codes.push(0);
-    }
+  for (let i = 0; i < sanitized.length; i++) {
+    codes.push(sanitized.charCodeAt(i) - 32);
   }
 
   const startCode = 104; // Start B
@@ -133,6 +129,7 @@ const encodeCode128B = (text) => {
 
   const sequence = [startCode, ...codes, checksum, 106];
   const barElements = [];
+  let totalModules = 0;
 
   sequence.forEach((codeIndex) => {
     const pattern = CODE128_PATTERNS[codeIndex];
@@ -142,17 +139,19 @@ const encodeCode128B = (text) => {
           isBar: pIdx % 2 === 0,
           width,
         });
+        totalModules += width;
       });
     }
   });
 
-  return barElements;
+  return { barElements, totalModules };
 };
 
 export default function BarcodeRenderer({
   value = "",
   height = 54,
   moduleWidth = 1.4,
+  maxContainerWidth,
   barColor = "#0F172A",
   spaceColor = "#FFFFFF",
   containerStyle,
@@ -161,22 +160,39 @@ export default function BarcodeRenderer({
     return null;
   }
 
-  const elements = encodeCode128B(String(value));
+  const { barElements, totalModules } = encodeCode128B(String(value));
+  if (barElements.length === 0 || totalModules === 0) {
+    return null;
+  }
+
+  // Calculate dynamic module width if maxContainerWidth is provided
+  let effectiveModuleWidth = moduleWidth;
+  if (maxContainerWidth && maxContainerWidth > 0) {
+    const availableWidth = maxContainerWidth - 16;
+    const fitWidth = availableWidth / totalModules;
+    effectiveModuleWidth = Math.min(moduleWidth, Math.max(0.8, fitWidth));
+  }
 
   return (
     <View style={[styles.wrapper, containerStyle]}>
-      <View style={[styles.barcodeRow, { height }]}>
-        {elements.map((elem, idx) => (
-          <View
-            key={idx}
-            style={{
-              width: elem.width * moduleWidth,
-              height: "100%",
-              backgroundColor: elem.isBar ? barColor : spaceColor,
-            }}
-          />
-        ))}
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={[styles.barcodeRow, { height }]}>
+          {barElements.map((elem, idx) => (
+            <View
+              key={idx}
+              style={{
+                width: elem.width * effectiveModuleWidth,
+                height: "100%",
+                backgroundColor: elem.isBar ? barColor : spaceColor,
+              }}
+            />
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -189,6 +205,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 8,
+    maxWidth: "100%",
+  },
+  scrollContent: {
+    alignItems: "center",
+    justifyContent: "center",
+    flexGrow: 1,
   },
   barcodeRow: {
     flexDirection: "row",
