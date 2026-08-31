@@ -8,7 +8,7 @@ import {
   Alert,
   StatusBar,
 } from "react-native";
-import { loginUser } from "../../services/authService";
+import { loginUser, getAuthErrorMessage } from "../../services/authService";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -16,16 +16,18 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       Alert.alert("입력 오류", "이메일과 비밀번호를 모두 입력해 주세요.");
       return;
     }
 
     try {
       setLoading(true);
-      await loginUser(email.trim(), password);
+      await loginUser(trimmedEmail, password);
     } catch (error) {
-      Alert.alert("로그인 실패", error.message || "이메일 또는 비밀번호를 확인해 주세요.");
+      const message = getAuthErrorMessage(error);
+      Alert.alert("로그인 실패", message);
     } finally {
       setLoading(false);
     }
@@ -52,6 +54,7 @@ export default function LoginScreen({ navigation }) {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
