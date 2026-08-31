@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  Modal,
 } from "react-native";
 import { logoutUser } from "../../services/authService";
 import {
@@ -17,11 +18,13 @@ import {
   deleteCoupon,
 } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
+import BarcodeRenderer from "../../components/BarcodeRenderer";
 
 export default function HomeScreen() {
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("active"); // "all", "active", "used"
+  const [selectedBarcodeCoupon, setSelectedBarcodeCoupon] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -38,7 +41,7 @@ export default function HomeScreen() {
       setCoupons(data);
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "쿠폰 목록을 불러오는 중 오류가 발생했습니다.");
+      Alert.alert("오류", "쿠폰 목록을 불러오는 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -58,7 +61,7 @@ export default function HomeScreen() {
       await updateCoupon(coupon.id, { isUsed: nextStatus });
       loadCoupons();
     } catch (error) {
-      Alert.alert("Error", "상태 변경 중 오류가 발생했습니다.");
+      Alert.alert("오류", "상태 변경 중 오류가 발생했습니다.");
     }
   };
 
@@ -76,7 +79,7 @@ export default function HomeScreen() {
               await deleteCoupon(coupon.id);
               loadCoupons();
             } catch (error) {
-              Alert.alert("Error", "쿠폰 삭제 중 오류가 발생했습니다.");
+              Alert.alert("오류", "쿠폰 삭제 중 오류가 발생했습니다.");
             }
           },
         },
@@ -149,10 +152,20 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.barcodeBox}>
-          <Text style={styles.barcodeIcon}>||| ||| || | ||| || |||</Text>
+        {/* Scannable Barcode Box */}
+        <TouchableOpacity
+          style={styles.barcodeBox}
+          activeOpacity={0.8}
+          onPress={() => setSelectedBarcodeCoupon(item)}
+        >
+          <BarcodeRenderer
+            value={item.barcodeNumber}
+            height={44}
+            moduleWidth={1.3}
+          />
           <Text style={styles.barcodeNumber}>{item.barcodeNumber}</Text>
-        </View>
+          <Text style={styles.barcodeTapHint}>터치하여 바코드 크게 보기</Text>
+        </TouchableOpacity>
 
         <Text style={styles.expiryText}>만료일: {formattedDate}</Text>
 
@@ -170,7 +183,7 @@ export default function HomeScreen() {
                 item.isUsed ? styles.reactivateText : styles.useButtonText,
               ]}
             >
-              {item.isUsed ? "↩️ 다시 활성화" : "✓ 사용 완료 처리"}
+              {item.isUsed ? "다시 활성화" : "사용 완료 처리"}
             </Text>
           </TouchableOpacity>
 
@@ -178,7 +191,7 @@ export default function HomeScreen() {
             style={styles.deleteButton}
             onPress={() => handleDelete(item)}
           >
-            <Text style={styles.deleteButtonText}>🗑️ 삭제</Text>
+            <Text style={styles.deleteButtonText}>삭제</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -211,9 +224,9 @@ export default function HomeScreen() {
       {/* Filter Tabs */}
       <View style={styles.tabContainer}>
         {[
-          { key: "active", label: "✨ 사용 가능" },
-          { key: "used", label: "✓ 사용 완료" },
-          { key: "all", label: "📋 전체" },
+          { key: "active", label: "사용 가능" },
+          { key: "used", label: "사용 완료" },
+          { key: "all", label: "전체" },
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -236,7 +249,6 @@ export default function HomeScreen() {
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#6366F1" />
-        </Text>
         </View>
       ) : (
         <FlatList
@@ -247,17 +259,53 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>🎟️</Text>
               <Text style={styles.emptyTitle}>쿠폰이 없습니다</Text>
               <Text style={styles.emptySubtitle}>
                 {filter === "active"
-                  ? "사용 가능한 쿠폰이 없습니다.\n상단의 '+ 쿠폰 등록' 버튼을 눌러보세요!"
+                  ? "사용 가능한 쿠폰이 없습니다.\n상단의 '+ 쿠폰 등록' 버튼을 눌러보세요."
                   : "해당 상태의 쿠폰 내역이 없습니다."}
               </Text>
             </View>
           }
         />
       )}
+
+      {/* Large Barcode Modal */}
+      <Modal
+        visible={!!selectedBarcodeCoupon}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedBarcodeCoupon(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalBrand}>
+              {selectedBarcodeCoupon?.brand}
+            </Text>
+            <Text style={styles.modalHint}>
+              결제 시 아래 바코드를 리더기에 스캔해 주세요.
+            </Text>
+
+            <View style={styles.modalBarcodeContainer}>
+              <BarcodeRenderer
+                value={selectedBarcodeCoupon?.barcodeNumber || ""}
+                height={84}
+                moduleWidth={2.0}
+              />
+              <Text style={styles.modalBarcodeNumber}>
+                {selectedBarcodeCoupon?.barcodeNumber}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setSelectedBarcodeCoupon(null)}
+            >
+              <Text style={styles.modalCloseButtonText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -399,27 +447,25 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   barcodeBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFF",
     padding: 12,
     borderRadius: 10,
     alignItems: "center",
     marginVertical: 10,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderStyle: "dashed",
-  },
-  barcodeIcon: {
-    fontSize: 18,
-    letterSpacing: 2,
-    color: "#334155",
-    fontWeight: "300",
-    marginBottom: 4,
   },
   barcodeNumber: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     color: "#0F172A",
     letterSpacing: 1.5,
+    marginTop: 6,
+  },
+  barcodeTapHint: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 2,
   },
   expiryText: {
     fontSize: 13,
@@ -487,10 +533,6 @@ const styles = StyleSheet.create({
     marginTop: 60,
     paddingHorizontal: 20,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "700",
@@ -502,5 +544,67 @@ const styles = StyleSheet.create({
     color: "#64748B",
     textAlign: "center",
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  modalContent: {
+    backgroundColor: "#FFF",
+    width: "100%",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalBrand: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  modalHint: {
+    fontSize: 13,
+    color: "#64748B",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  modalBarcodeContainer: {
+    backgroundColor: "#FFF",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 24,
+  },
+  modalBarcodeNumber: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: 2,
+    marginTop: 12,
+  },
+  modalCloseButton: {
+    backgroundColor: "#6366F1",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalCloseButtonText: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
