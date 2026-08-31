@@ -51,15 +51,30 @@ export default function AddCouponScreen({ navigation }) {
     const m = parseInt(pickerMonth, 10);
     const d = parseInt(pickerDay, 10);
 
-    if (isNaN(y) || isNaN(m) || isNaN(d) || m < 1 || m > 12 || d < 1 || d > 31) {
-      Alert.alert("입력 오류", "올바른 날짜를 입력해 주세요.");
+    const currentYear = new Date().getFullYear();
+
+    if (isNaN(y) || isNaN(m) || isNaN(d)) {
+      Alert.alert("입력 오류", "날짜 숫자를 모두 입력해 주세요.");
+      return;
+    }
+
+    if (y < currentYear || y > currentYear + 20) {
+      Alert.alert("입력 오류", `연도는 ${currentYear}년부터 ${currentYear + 20}년 사이로 입력해 주세요.`);
+      return;
+    }
+
+    if (m < 1 || m > 12) {
+      Alert.alert("입력 오류", "월은 1월부터 12월 사이로 입력해 주세요.");
       return;
     }
 
     const daysInMonth = new Date(y, m, 0).getDate();
-    const validDay = Math.min(d, daysInMonth);
-    const customDate = new Date(y, m - 1, validDay, 23, 59, 59, 999);
+    if (d < 1 || d > daysInMonth) {
+      Alert.alert("입력 오류", `${m}월은 1일부터 ${daysInMonth}일까지 입력 가능합니다.`);
+      return;
+    }
 
+    const customDate = new Date(y, m - 1, d, 23, 59, 59, 999);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -73,12 +88,20 @@ export default function AddCouponScreen({ navigation }) {
   };
 
   const handleSave = async () => {
-    if (!brand.trim()) {
-      Alert.alert("입력 오류", "브랜드명을 입력해 주세요.");
+    const trimmedBrand = brand.trim();
+    const cleanBarcode = barcodeNumber.replace(/[\s-]/g, "").trim();
+
+    if (!trimmedBrand) {
+      Alert.alert("입력 오류", "브랜드명 또는 상품명을 입력해 주세요.");
       return;
     }
-    if (!barcodeNumber.trim()) {
+    if (!cleanBarcode) {
       Alert.alert("입력 오류", "바코드 번호를 입력해 주세요.");
+      return;
+    }
+
+    if (!auth.currentUser) {
+      Alert.alert("인증 오류", "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
       return;
     }
 
@@ -90,18 +113,18 @@ export default function AddCouponScreen({ navigation }) {
     }
 
     const couponData = {
-      brand: brand.trim(),
-      barcodeNumber: barcodeNumber.trim(),
+      brand: trimmedBrand,
+      barcodeNumber: cleanBarcode,
       expiryDate,
       isUsed: false,
-      userId: auth.currentUser?.uid || "anonymous",
+      userId: auth.currentUser.uid,
     };
 
     try {
       await addCoupon(couponData);
       navigation.goBack();
     } catch (error) {
-      Alert.alert("등록 실패", "쿠폰 저장 중 오류가 발생했습니다.");
+      Alert.alert("등록 실패", error.message || "쿠폰 저장 중 오류가 발생했습니다.");
       console.error("Save error:", error);
     }
   };
@@ -112,7 +135,7 @@ export default function AddCouponScreen({ navigation }) {
   now.setHours(0, 0, 0, 0);
   const expClone = new Date(expiryDate);
   expClone.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((expClone - now) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.ceil((expClone.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
