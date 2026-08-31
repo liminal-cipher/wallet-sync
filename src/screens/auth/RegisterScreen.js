@@ -8,7 +8,7 @@ import {
   Alert,
   StatusBar,
 } from "react-native";
-import { signUpUser } from "../../services/authService";
+import { signUpUser, getAuthErrorMessage } from "../../services/authService";
 
 export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -17,7 +17,8 @@ export default function RegisterScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async () => {
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       Alert.alert("입력 오류", "이메일과 비밀번호를 모두 입력해 주세요.");
       return;
     }
@@ -34,9 +35,10 @@ export default function RegisterScreen({ navigation }) {
 
     try {
       setLoading(true);
-      await signUpUser(email.trim(), password);
+      await signUpUser(trimmedEmail, password);
     } catch (error) {
-      Alert.alert("회원가입 실패", error.message || "회원가입 중 오류가 발생했습니다.");
+      const message = getAuthErrorMessage(error);
+      Alert.alert("회원가입 실패", message);
     } finally {
       setLoading(false);
     }
@@ -63,6 +65,7 @@ export default function RegisterScreen({ navigation }) {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
