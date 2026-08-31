@@ -15,8 +15,9 @@ WalletSync treats a coupon as a record instead of a photo: it has a brand, a bar
 ## What It Does
 
 - Register and sign in with email and password, with the session restored on relaunch
-- Add a coupon with brand, barcode number, and expiry date
+- Add a coupon with brand, barcode number, and expiry date via quick presets or custom date input
 - Browse coupons sorted by expiry, nearest first
+- Render scannable Code 128 barcodes directly on cards with tap-to-enlarge modal for checkout counters
 - See a status badge on each card: expired, due today, or days remaining
 - Mark a coupon used, or bring it back to active
 - Delete a coupon behind a confirmation prompt
@@ -39,7 +40,10 @@ Reads happen when a screen gains focus rather than through a live listener, so t
 ```text
 wallet-sync/
 ├── App.js                        # Root component, auth-based navigation
+├── firestore.rules               # Firestore security rules
 ├── src/
+│   ├── components/
+│   │   └── BarcodeRenderer.js    # Code 128 barcode generator
 │   ├── screens/
 │   │   ├── auth/                 # Login, Register
 │   │   └── home/                 # Coupon list, Add coupon form
@@ -63,10 +67,10 @@ wallet-sync/
 
 No performance or usage numbers have been measured. The app has been exercised by hand on a single account, and there are no automated tests.
 
-- **Data isolation is enforced on the client only.** Queries filter by `userId`, but the repository contains no Firestore security rules, so the isolation depends on rules configured in the console rather than on anything version controlled here. Treat the deployed setup as unverified until rules are committed alongside the code.
+- **Data isolation is defined in `firestore.rules`.** Queries filter by `userId`, and the repository contains version-controlled Firestore security rules enforcing document ownership boundaries.
 - **There is no real-time sync.** The list is fetched on screen focus, so a change made on another device appears on the next navigation, not immediately.
 - **Nothing reminds the user.** Expiry is visible only while the app is open, which leaves the original problem, forgetting, partly unsolved.
-- Barcodes are stored and displayed as numbers, not rendered as scannable barcodes.
+- Barcodes are rendered as Code 128 barcodes with tap-to-enlarge modal support for retail POS scanners.
 - Expiry handling uses the device's local date with no timezone normalization.
 
 ## Getting Started
@@ -76,7 +80,7 @@ No performance or usage numbers have been measured. The app has been exercised b
 1. Create a project in the [Firebase Console](https://console.firebase.google.com/).
 2. Enable **Email/Password** authentication under Authentication.
 3. Create a **Firestore Database** with a `coupons` collection.
-4. Add security rules restricting each document to its owner. This is not optional. Without it the `userId` filter is a client-side convention, not a boundary.
+4. Deploy the security rules from `firestore.rules` to restrict document access to the authenticated owner.
 
 ### Local Installation
 
@@ -108,15 +112,14 @@ npm run web    # browser, via react-native-web
 
 ## Roadmap
 
-- **Commit Firestore security rules** so the ownership boundary lives in the repository and can be reviewed.
 - **Expiry notifications**: Expo Push Notifications a few days before a coupon runs out. This is the feature that closes the loop on the motivation.
 - **Barcode scanning**: camera capture with OCR to fill in brand, number, and expiry instead of typing them.
-- **Rendered barcodes** so a stored coupon can actually be scanned at a counter.
 
 ## Status
 
-In development. Last updated 2026-08-10.
+In development. Last updated 2026-08-31.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
