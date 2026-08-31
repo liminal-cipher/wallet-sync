@@ -23,6 +23,7 @@ import BarcodeRenderer from "../../components/BarcodeRenderer";
 export default function HomeScreen() {
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [filter, setFilter] = useState("active"); // "all", "active", "used"
   const [selectedBarcodeCoupon, setSelectedBarcodeCoupon] = useState(null);
 
@@ -37,11 +38,12 @@ export default function HomeScreen() {
   const loadCoupons = async () => {
     try {
       setLoading(true);
+      setFetchError(false);
       const data = await fetchCoupons(auth.currentUser?.uid);
       setCoupons(data);
     } catch (error) {
       console.error(error);
-      Alert.alert("오류", "쿠폰 목록을 불러오는 중 오류가 발생했습니다.");
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -88,28 +90,49 @@ export default function HomeScreen() {
   };
 
   const getExpiryInfo = (expiryDate, isUsed) => {
-    if (isUsed)
+    if (isUsed) {
       return { text: "사용 완료", color: "#64748B", bg: "#F1F5F9", border: "#CBD5E1" };
-    if (!expiryDate)
-      return { text: "사용 가능", color: "#10B981", bg: "#ECFDF5", border: "#6EE7B7" };
+    }
+    if (!expiryDate) {
+      return { text: "만료일 없음", color: "#10B981", bg: "#ECFDF5", border: "#6EE7B7" };
+    }
+
+    const exp = typeof expiryDate.toDate === "function" ? expiryDate.toDate() : new Date(expiryDate);
+    if (isNaN(exp.getTime())) {
+      return { text: "만료일 미정", color: "#64748B", bg: "#F1F5F9", border: "#CBD5E1" };
+    }
 
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    const exp = expiryDate.toDate ? expiryDate.toDate() : new Date(expiryDate);
-    exp.setHours(0, 0, 0, 0);
-    const diffTime = exp - now;
+    const expZero = new Date(exp);
+    expZero.setHours(0, 0, 0, 0);
+
+    const diffTime = expZero.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 0)
+    if (diffDays < 0) {
       return { text: "만료됨", color: "#E11D48", bg: "#FFE4E6", border: "#FDA4AF" };
-    if (diffDays === 0)
+    }
+    if (diffDays === 0) {
       return { text: "D-Day (오늘)", color: "#EA580C", bg: "#FFEDD5", border: "#FDBA74" };
+    }
     return {
       text: `D-${diffDays}`,
       color: "#059669",
       bg: "#D1FAE5",
       border: "#6EE7B7",
     };
+  };
+
+  const getFormattedDate = (expiryDate) => {
+    if (!expiryDate) return "만료일 없음";
+    const d = typeof expiryDate.toDate === "function" ? expiryDate.toDate() : new Date(expiryDate);
+    if (isNaN(d.getTime())) return "만료일 없음";
+    return d.toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
 
   const filteredCoupons = coupons.filter((item) => {
@@ -120,13 +143,7 @@ export default function HomeScreen() {
 
   const renderCouponCard = ({ item }) => {
     const expiryInfo = getExpiryInfo(item.expiryDate, item.isUsed);
-    const formattedDate = item.expiryDate?.toDate
-      ? item.expiryDate.toDate().toLocaleDateString("ko-KR", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-      : "만료일 없음";
+    const formattedDate = getFormattedDate(item.expiryDate);
 
     return (
       <View
@@ -161,7 +178,7 @@ export default function HomeScreen() {
           <BarcodeRenderer
             value={item.barcodeNumber}
             height={44}
-            moduleWidth={1.3}
+            maxContainerWidth={280}
           />
           <Text style={styles.barcodeNumber}>{item.barcodeNumber}</Text>
           <Text style={styles.barcodeTapHint}>터치하여 바코드 크게 보기</Text>
@@ -245,10 +262,21 @@ export default function HomeScreen() {
         ))}
       </View>
 
-      {/* Coupon List */}
+      {/* Coupon List / Loading / Error State */}
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#6366F1" />
+        </View>
+      ) : fetchError ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorTitle}>목록을 불러올 수 없습니다</Text>
+          <Text style={styles.errorSubtitle}>
+            네트워크 연결을 확인하거나 잠시 후 다시 시도해 주세요.
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadCoupons}>
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -289,8 +317,8 @@ export default function HomeScreen() {
             <View style={styles.modalBarcodeContainer}>
               <BarcodeRenderer
                 value={selectedBarcodeCoupon?.barcodeNumber || ""}
-                height={84}
-                moduleWidth={2.0}
+                height={88}
+                maxContainerWidth={320}
               />
               <Text style={styles.modalBarcodeNumber}>
                 {selectedBarcodeCoupon?.barcodeNumber}
@@ -526,6 +554,40 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  errorContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 60,
+    paddingHorizontal: 20,
+  },
+  errorIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: "#6366F1",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
   emptyContainer: {
     alignItems: "center",
