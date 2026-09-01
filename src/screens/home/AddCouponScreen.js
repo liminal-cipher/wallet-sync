@@ -16,6 +16,7 @@ import * as ImagePicker from "expo-image-picker";
 import { addCoupon } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
 import { scheduleCouponExpiryNotification } from "../../services/notificationService";
+import { parseVoucherText } from "../../utils/voucherParser";
 
 export default function AddCouponScreen({ navigation }) {
   const [brand, setBrand] = useState("");
@@ -37,6 +38,10 @@ export default function AddCouponScreen({ navigation }) {
   const [isCameraVisible, setIsCameraVisible] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+
+  // Smart Text Parser Modal State
+  const [isSmartModalVisible, setIsSmartModalVisible] = useState(false);
+  const [smartInputText, setSmartInputText] = useState("");
 
   const setPresetDays = (days) => {
     const d = new Date();
@@ -126,6 +131,50 @@ export default function AddCouponScreen({ navigation }) {
     }
   };
 
+  const handleOpenSmartModal = () => {
+    setIsSmartModalVisible(true);
+  };
+
+  const handleApplySmartParse = () => {
+    if (!smartInputText.trim()) {
+      Alert.alert("입력 오류", "분석할 쿠폰/기프티콘 텍스트를 입력해 주세요.");
+      return;
+    }
+
+    const parsed = parseVoucherText(smartInputText);
+    const extractedList = [];
+
+    if (parsed.brand) {
+      setBrand(parsed.brand);
+      extractedList.push(`브랜드: ${parsed.brand}`);
+    }
+    if (parsed.barcodeNumber) {
+      setBarcodeNumber(parsed.barcodeNumber);
+      extractedList.push(`바코드: ${parsed.barcodeNumber}`);
+    }
+    if (parsed.expiryDate) {
+      setExpiryDate(parsed.expiryDate);
+      setPickerYear(parsed.expiryDate.getFullYear());
+      setPickerMonth(parsed.expiryDate.getMonth() + 1);
+      setPickerDay(parsed.expiryDate.getDate());
+      extractedList.push(
+        `유효기간: ${parsed.expiryDate.getFullYear()}년 ${parsed.expiryDate.getMonth() + 1}월 ${parsed.expiryDate.getDate()}일`
+      );
+    }
+
+    setIsSmartModalVisible(false);
+    setSmartInputText("");
+
+    if (extractedList.length > 0) {
+      Alert.alert("✨ 스마트 자동 분석 완료", extractedList.join("\n"));
+    } else {
+      Alert.alert(
+        "분석 결과",
+        "인식 가능한 브랜드, 바코드 번호 또는 날짜 패턴을 찾지 못했습니다. 직접 입력해 주세요."
+      );
+    }
+  };
+
   const handlePickImage = async () => {
     try {
       const permissionResult =
@@ -143,8 +192,15 @@ export default function AddCouponScreen({ navigation }) {
 
       if (!result.canceled && result.assets && result.assets[0]) {
         Alert.alert(
-          "이미지 선택 완료",
-          "쿠폰 이미지를 불러왔습니다. 바코드 번호와 브랜드를 확인해 주세요."
+          "이미지 불러오기 완료",
+          "쿠폰 이미지를 선택했습니다. 카카오톡이나 메시지에서 복사한 텍스트가 있다면 '✨ 스마트 텍스트' 기능으로 한 번에 자동 입력할 수 있습니다.",
+          [
+            { text: "확인", style: "default" },
+            {
+              text: "스마트 텍스트 입력",
+              onPress: () => setIsSmartModalVisible(true),
+            },
+          ]
         );
       }
     } catch (err) {
@@ -220,10 +276,13 @@ export default function AddCouponScreen({ navigation }) {
       {/* Quick Input Actions */}
       <View style={styles.quickActionRow}>
         <TouchableOpacity style={styles.quickScanButton} onPress={handleOpenScanner}>
-          <Text style={styles.quickScanText}>📷 바코드 카메라 스캔</Text>
+          <Text style={styles.quickScanText}>📷 바코드 스캔</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.quickSmartButton} onPress={handleOpenSmartModal}>
+          <Text style={styles.quickSmartText}>✨ 스마트 텍스트</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.quickImageButton} onPress={handlePickImage}>
-          <Text style={styles.quickImageText}>🖼️ 갤러리 이미지</Text>
+          <Text style={styles.quickImageText}>🖼️ 갤러리</Text>
         </TouchableOpacity>
       </View>
 
@@ -405,6 +464,49 @@ export default function AddCouponScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Smart Voucher Text Parser Modal */}
+      <Modal
+        visible={isSmartModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsSmartModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>✨ 스마트 텍스트 자동 분석</Text>
+            <Text style={styles.modalSubtitle}>
+              카카오톡 선물하기, 기프티콘, SMS 메시지 또는 OCR 텍스트를 붙여넣으시면 브랜드, 바코드, 유효기간을 자동으로 분석하여 채워줍니다.
+            </Text>
+
+            <TextInput
+              style={styles.smartTextArea}
+              placeholder="여기에 쿠폰 메시지를 붙여넣어 주세요..."
+              placeholderTextColor="#94A3B8"
+              value={smartInputText}
+              onChangeText={setSmartInputText}
+              multiline={true}
+              numberOfLines={5}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setIsSmartModalVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={handleApplySmartParse}
+              >
+                <Text style={styles.modalConfirmText}>자동 분석 및 채우기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -446,7 +548,7 @@ const styles = StyleSheet.create({
   },
   quickActionRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
     marginBottom: 22,
   },
   quickScanButton: {
@@ -454,26 +556,43 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF2FF",
     borderWidth: 1,
     borderColor: "#C7D2FE",
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
   quickScanText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#4F46E5",
   },
+  quickSmartButton: {
+    flex: 1.2,
+    backgroundColor: "#F5F3FF",
+    borderWidth: 1,
+    borderColor: "#DDD6FE",
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickSmartText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#7C3AED",
+  },
   quickImageButton: {
-    flex: 1,
+    flex: 0.9,
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
   quickImageText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#475569",
   },
@@ -718,5 +837,18 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 15,
     fontWeight: "700",
+  },
+  smartTextArea: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    color: "#0F172A",
+    height: 120,
+    width: "100%",
+    marginBottom: 20,
+    lineHeight: 20,
   },
 });

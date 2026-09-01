@@ -33,6 +33,24 @@ const getExpiryInfo = (expiryDate, isUsed) => {
   };
 };
 
+/**
+ * Sorts coupon objects in memory by expiryDate in ascending order.
+ * Handles Firestore Timestamp objects and standard Date/ISO strings.
+ */
+const sortCouponsByExpiry = (coupons) => {
+  if (!Array.isArray(coupons)) return [];
+  return [...coupons].sort((a, b) => {
+    const getMillis = (val) => {
+      if (!val) return 0;
+      if (typeof val.toDate === "function") return val.toDate().getTime();
+      const t = new Date(val).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+    return getMillis(a.expiryDate) - getMillis(b.expiryDate);
+  });
+};
+
 module.exports = {
   getExpiryInfo,
+  sortCouponsByExpiry,
 };

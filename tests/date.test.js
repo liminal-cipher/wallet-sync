@@ -1,4 +1,4 @@
-const { getExpiryInfo } = require("../src/utils/dateUtils");
+const { getExpiryInfo, sortCouponsByExpiry } = require("../src/utils/dateUtils");
 
 describe("dateUtils - getExpiryInfo", () => {
   test("returns '사용 완료' when coupon is marked used", () => {
@@ -30,5 +30,53 @@ describe("dateUtils - getExpiryInfo", () => {
     const future = new Date();
     future.setDate(future.getDate() + 10);
     expect(getExpiryInfo(future, false).text).toBe("D-10");
+  });
+});
+
+describe("dateUtils - sortCouponsByExpiry", () => {
+  test("sorts coupons by expiryDate in ascending order", () => {
+    const coupons = [
+      { id: "1", brand: "C", expiryDate: new Date("2026-12-31") },
+      { id: "2", brand: "A", expiryDate: new Date("2026-05-01") },
+      { id: "3", brand: "B", expiryDate: new Date("2026-08-15") },
+    ];
+
+    const sorted = sortCouponsByExpiry(coupons);
+    expect(sorted.map((c) => c.brand)).toEqual(["A", "B", "C"]);
+  });
+
+  test("handles Firestore Timestamp objects with toDate()", () => {
+    const coupons = [
+      {
+        id: "1",
+        brand: "Later",
+        expiryDate: { toDate: () => new Date("2027-01-01") },
+      },
+      {
+        id: "2",
+        brand: "Earlier",
+        expiryDate: { toDate: () => new Date("2026-06-01") },
+      },
+    ];
+
+    const sorted = sortCouponsByExpiry(coupons);
+    expect(sorted[0].brand).toBe("Earlier");
+    expect(sorted[1].brand).toBe("Later");
+  });
+
+  test("handles null or missing expiry dates safely", () => {
+    const coupons = [
+      { id: "1", brand: "Valid", expiryDate: new Date("2026-12-31") },
+      { id: "2", brand: "NullDate", expiryDate: null },
+    ];
+
+    const sorted = sortCouponsByExpiry(coupons);
+    expect(sorted[0].brand).toBe("NullDate");
+    expect(sorted[1].brand).toBe("Valid");
+  });
+
+  test("handles non-array inputs safely", () => {
+    expect(sortCouponsByExpiry(null)).toEqual([]);
+    expect(sortCouponsByExpiry(undefined)).toEqual([]);
   });
 });
