@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import {
   View,
@@ -10,10 +10,12 @@ import {
   Alert,
   StatusBar,
   Modal,
+  RefreshControl,
 } from "react-native";
 import { logoutUser } from "../../services/authService";
 import {
   fetchCoupons,
+  subscribeCoupons,
   updateCoupon,
   deleteCoupon,
 } from "../../services/firestoreService";
@@ -28,29 +30,54 @@ import { getExpiryInfo } from "../../utils/dateUtils";
 export default function HomeScreen() {
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [filter, setFilter] = useState("active"); // "all", "active", "used"
   const [selectedBarcodeCoupon, setSelectedBarcodeCoupon] = useState(null);
 
+  const navigation = useNavigation();
+
+  // Setup real-time listener whenever screen is focused
   useFocusEffect(
     useCallback(() => {
-      loadCoupons();
+      setLoading(true);
+      setFetchError(false);
+
+      const userId = auth.currentUser?.uid;
+      const unsubscribe = subscribeCoupons(
+        userId,
+        (data) => {
+          setCoupons(data);
+          setLoading(false);
+          setRefreshing(false);
+        },
+        (error) => {
+          console.error("Subscription error:", error);
+          setFetchError(true);
+          setLoading(false);
+          setRefreshing(false);
+        }
+      );
+
+      return () => {
+        if (typeof unsubscribe === "function") {
+          unsubscribe();
+        }
+      };
     }, [])
   );
 
-  const navigation = useNavigation();
-
-  const loadCoupons = async () => {
+  const handleRefresh = async () => {
     try {
-      setLoading(true);
+      setRefreshing(true);
       setFetchError(false);
       const data = await fetchCoupons(auth.currentUser?.uid);
       setCoupons(data);
     } catch (error) {
-      console.error(error);
+      console.error("Refresh error:", error);
       setFetchError(true);
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -73,7 +100,6 @@ export default function HomeScreen() {
         // Reactivated -> reschedule alerts
         await scheduleCouponExpiryNotification({ ...coupon, isUsed: false });
       }
-      loadCoupons();
     } catch (error) {
       Alert.alert("오류", "상태 변경 중 오류가 발생했습니다.");
     }
@@ -92,7 +118,6 @@ export default function HomeScreen() {
             try {
               await deleteCoupon(coupon.id);
               await cancelCouponNotifications(coupon.id);
-              loadCoupons();
             } catch (error) {
               Alert.alert("오류", "쿠폰 삭제 중 오류가 발생했습니다.");
             }
@@ -252,7 +277,7 @@ export default function HomeScreen() {
           <Text style={styles.errorSubtitle}>
             네트워크 연결을 확인하거나 잠시 후 다시 시도해 주세요.
           </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadCoupons}>
+          <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
             <Text style={styles.retryButtonText}>다시 시도</Text>
           </TouchableOpacity>
         </View>
@@ -263,6 +288,14 @@ export default function HomeScreen() {
           renderItem={renderCouponCard}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={["#6366F1"]}
+              tintColor="#6366F1"
+            />
+          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>쿠폰이 없습니다</Text>
