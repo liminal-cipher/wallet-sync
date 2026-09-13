@@ -89,7 +89,8 @@ The app has been exercised by hand on a single account, and core business utilit
 - **Smart voucher text parsing.** Parses pasted KakaoTalk gifticon, Giftishow, SMS, or OCR-produced text to fill brand, PIN, and expiry date.
 - **Expiry reminders run locally.** Notifications are scheduled on device at D-7, D-3, and D-Day morning, closing the loop on voucher expiration.
 - **Barcodes are rendered as Code 128 barcodes.** Card-level barcodes dynamically scale to container constraints, and tap-to-enlarge modals provide high-contrast display for POS scanners.
-- Gallery selection currently does not run OCR or persist the selected image; metadata extraction requires text input.`n- Expiry handling uses the device's local date with no timezone normalization.
+- Gallery selection currently does not run OCR or persist the selected image; metadata extraction requires text input.
+- Expiry handling uses the device's local date with no timezone normalization.
 
 ## Getting Started
 
@@ -124,7 +125,7 @@ EXPO_PUBLIC_FIREBASE_APP_ID=...
 Then start the development server or run unit tests:
 
 ```bash
-npm test       # run Jest unit test suite (34 passed)
+npm test       # run Jest unit test suite
 npm start      # device or emulator via Expo Go
 npm run web    # browser, via react-native-web
 ```
@@ -137,7 +138,7 @@ npm run web    # browser, via react-native-web
 
 ## Status
 
-Active. Real-time multi-device sync implemented. Last updated 2026-09-01.
+Active. Real-time multi-device sync implemented. Last updated 2026-09-14.
 
 ## License
 
