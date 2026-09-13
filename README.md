@@ -15,7 +15,7 @@ WalletSync treats a coupon as a record instead of a photo: it has a brand, a bar
 ## What It Does
 
 - Register and sign in with email and password, with the session restored on relaunch
-- Add a coupon via camera barcode scanning, smart text parser, gallery voucher image selection, quick presets, or manual input
+- Add a coupon via camera barcode scanning, smart text parsing, quick presets, or manual input
 - Browse coupons sorted by expiry, nearest first
 - Real-time Firestore sync across devices with pull-to-refresh fallback
 - Render scannable Code 128 barcodes directly on cards with tap-to-enlarge modal for checkout counters
@@ -35,10 +35,10 @@ graph TD
     B -->|Session token| C[AsyncStorage: persist login]
     A -->|Real-time onSnapshot & writes| D(Firestore: coupons)
     A -->|Schedule / Cancel| E[Local Push Notifications]
-    A -->|Auto extraction| F[Smart Voucher Parser]
+    A -->|Text parsing| F[Smart Voucher Parser]
 ```
 
-Coupon state is synced instantly via Firestore `onSnapshot` real-time listeners, with offline resilience and pull-to-refresh (`RefreshControl`).
+Coupon state is synced via Firestore `onSnapshot` real-time listeners, with pull-to-refresh (`RefreshControl`) as a manual fallback.
 
 ```text
 wallet-sync/
@@ -86,10 +86,10 @@ The app has been exercised by hand on a single account, and core business utilit
 
 - **Data isolation is defined in `firestore.rules`.** Queries filter by `userId`, and the repository contains version-controlled Firestore security rules enforcing document ownership boundaries.
 - **Real-time synchronization.** Coupon additions, status updates, and deletions reflect instantly across active devices via Firestore snapshot listeners.
-- **Smart voucher & gifticon extraction.** Parses KakaoTalk gifticons, Giftishow, SMS coupons, and OCR text to automatically fill brand, PIN, and expiry date.
+- **Smart voucher text parsing.** Parses pasted KakaoTalk gifticon, Giftishow, SMS, or OCR-produced text to fill brand, PIN, and expiry date.
 - **Expiry reminders run locally.** Notifications are scheduled on device at D-7, D-3, and D-Day morning, closing the loop on voucher expiration.
 - **Barcodes are rendered as Code 128 barcodes.** Card-level barcodes dynamically scale to container constraints, and tap-to-enlarge modals provide high-contrast display for POS scanners.
-- Expiry handling uses the device's local date with no timezone normalization.
+- Gallery selection currently does not run OCR or persist the selected image; metadata extraction requires text input.`n- Expiry handling uses the device's local date with no timezone normalization.
 
 ## Getting Started
 
@@ -137,7 +137,7 @@ npm run web    # browser, via react-native-web
 
 ## Status
 
-Active. Multi-device sync in production. Last updated 2026-09-01.
+Active. Real-time multi-device sync implemented. Last updated 2026-09-01.
 
 ## License
 
