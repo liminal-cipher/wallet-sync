@@ -52,11 +52,11 @@ wallet-sync/
 │   │   └── home/                 # Coupon list, Add coupon form
 │   ├── services/
 │   │   ├── authService.js        # Login, signup, logout helpers
-│   │   ├── firebase.js           # Firebase app and service initialization
+│   │   ├── firebase.js           # Firebase app and service initialisation
 │   │   ├── firestoreService.js   # Firestore CRUD & onSnapshot real-time sync
 │   │   └── notificationService.js# Expiry notification scheduling
 │   └── utils/
-│       ├── authUtils.js          # Localized error code mappings
+│       ├── authUtils.js          # Localised error code mappings
 │       ├── barcodeEncoder.js     # Code 128 encoding patterns
 │       ├── dateUtils.js          # Expiry D-day calculations & sorting
 │       └── voucherParser.js      # Smart gifticon text/brand/date extraction
@@ -73,7 +73,7 @@ wallet-sync/
 | --- | --- | --- |
 | Framework | React Native (Expo) | One JS codebase reaches iOS, Android, and the browser, and Expo removes the native build step from a solo project |
 | Backend | Firebase | Auth and a hosted datastore without deploying or paying for a server |
-| Real-time sync | Firestore `onSnapshot` | Instant multi-device synchronization and reactive UI updates without manual polling |
+| Real-time sync | Firestore `onSnapshot` | Instant multi-device synchronisation and reactive UI updates without manual polling |
 | Session persistence | AsyncStorage via `getReactNativePersistence` | React Native has no browser storage, so Firebase Auth needs an explicit persistence adapter or the user is logged out on every relaunch |
 | Notifications | `expo-notifications` (over remote push server) | Scheduled local notifications trigger on-device without requiring a custom push server or persistent backend worker |
 | Barcode scanning & Smart Parsing | `expo-camera` + Smart Regex Parser | Client-side barcode scanning combined with deterministic Korean gifticon brand, PIN, and date extraction without third-party cloud OCR costs or network latency |
@@ -85,12 +85,12 @@ wallet-sync/
 The app has been exercised by hand on a single account, and core business utilities are validated with automated Jest unit tests (`npm test`).
 
 - **Data isolation is defined in `firestore.rules`.** Queries filter by `userId`, and the repository contains version-controlled Firestore security rules enforcing document ownership boundaries.
-- **Real-time synchronization.** Coupon additions, status updates, and deletions reflect instantly across active devices via Firestore snapshot listeners.
+- **Real-time synchronisation.** Coupon additions, status updates, and deletions reflect instantly across active devices via Firestore snapshot listeners.
 - **Smart voucher text parsing.** Parses pasted KakaoTalk gifticon, Giftishow, SMS, or OCR-produced text to fill brand, PIN, and expiry date.
 - **Expiry reminders run locally.** Notifications are scheduled on device at D-7, D-3, and D-Day morning, closing the loop on voucher expiration.
 - **Barcodes are rendered as Code 128 barcodes.** Card-level barcodes dynamically scale to container constraints, and tap-to-enlarge modals provide high-contrast display for POS scanners.
 - Gallery selection currently does not run OCR or persist the selected image; metadata extraction requires text input.
-- Expiry handling uses the device's local date with no timezone normalization.
+- Expiry handling uses the device's local date with no timezone normalisation.
 
 ## Getting Started
 
@@ -132,7 +132,7 @@ npm run web    # browser, via react-native-web
 
 ## Roadmap
 
-- [x] **Real-time Firestore sync**: Real-time snapshot listener for multi-device instant synchronization.
+- [x] **Real-time Firestore sync**: Real-time snapshot listener for multi-device instant synchronisation.
 - [x] **Smart voucher parser & extractor**: Automatic parsing of brand, barcode PIN, and expiry date from voucher text/OCR.
 - [ ] **Cloud backup & export**: PDF / CSV export for offline backup.
 
