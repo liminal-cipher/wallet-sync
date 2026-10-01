@@ -14,10 +14,10 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
+// Initialise Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
+// Initialise Firebase services
 const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });

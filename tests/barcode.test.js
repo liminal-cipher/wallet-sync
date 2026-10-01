@@ -13,7 +13,7 @@ describe("BarcodeRenderer - Code 128 Encoding", () => {
     expect(totalModules).toBe(35); // Start(11) + Checksum(11) + Stop(13)
   });
 
-  test("strips non-ASCII characters and sanitizes correctly", () => {
+  test("strips non-ASCII characters and sanitises correctly", () => {
     const resultWithKorean = encodeCode128B("스타벅스1234");
     const resultPlain = encodeCode128B("1234");
     expect(resultWithKorean.totalModules).toBe(resultPlain.totalModules);

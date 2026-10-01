@@ -51,7 +51,7 @@ describe("voucherParser", () => {
   });
 
   describe("extractBarcodeNumber", () => {
-    test("extracts labeled barcode numbers with dashes or spaces", () => {
+    test("extracts labelled barcode numbers with dashes or spaces", () => {
       const text = "[카카오톡 선물하기]\n쿠폰번호: 9912-3456-7890\n교환처: 스타벅스";
       expect(extractBarcodeNumber(text)).toBe("991234567890");
     });
@@ -77,7 +77,7 @@ describe("voucherParser", () => {
       expect(extractBrand(text)).toBe("배스킨라빈스");
     });
 
-    test("extracts brand from labeled field (교환처: ...)", () => {
+    test("extracts brand from labelled field (교환처: ...)", () => {
       const text = "[기프티쇼]\n상품명: 카페라떼\n교환처: 투썸플레이스\n유효기간: 2026.11.20";
       expect(extractBrand(text)).toBe("투썸플레이스");
     });

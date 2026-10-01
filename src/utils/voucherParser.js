@@ -115,7 +115,7 @@ function extractExpiryDate(text) {
 
 /**
  * Extracts a barcode or coupon pin number from text.
- * Prioritizes labeled barcode numbers (쿠폰번호, 바코드, 바코드번호, etc.)
+ * Prioritises labelled barcode numbers (쿠폰번호, 바코드, 바코드번호, etc.)
  * or finds 8-24 digit numeric sequences (including hyphens/spaces).
  * 
  * @param {string} text 
@@ -171,7 +171,7 @@ function extractBarcodeNumber(text) {
 function extractBrand(text) {
   if (!text || typeof text !== "string") return null;
 
-  // 1. Check for labeled brand keywords (교환처, 사용처, 가맹점, 브랜드)
+  // 1. Check for labelled brand keywords (교환처, 사용처, 가맹점, 브랜드)
   const labeledBrandRegex = /(?:교환처|사용처|가맹점|브랜드|매장)[\s:：]+([^\n\r,]+)/;
   const labeledMatch = text.match(labeledBrandRegex);
   if (labeledMatch) {

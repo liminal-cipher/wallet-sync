@@ -14,7 +14,7 @@ import { sortCouponsByExpiry } from "../utils/dateUtils";
 
 /**
  * Real-time snapshot listener for the authenticated user's coupons.
- * Automatically synchronizes changes across multiple clients/devices.
+ * Automatically synchronises changes across multiple clients/devices.
  * 
  * @param {string|null} userId 
  * @param {function} onUpdate Callback receiving sorted coupon array
