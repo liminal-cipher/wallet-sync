@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require("@firebase/rules-unit-testing");
-const { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, setLogLevel } = require("firebase/firestore");
+const { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, setLogLevel, writeBatch } = require("firebase/firestore");
 
 // Run against a local emulator only; ordinary unit tests do not need Java.
 const emulatorAddress = process.env.FIRESTORE_EMULATOR_HOST;
@@ -41,11 +41,16 @@ rulesTests("Firestore coupon ownership", () => {
     if (environment) await environment.cleanup();
   });
 
-  test("the owner can read, update and delete their coupon", async () => {
+  test("the owner can archive and soft-delete a coupon but cannot permanently erase it", async () => {
     const coupon = doc(owner, "coupons", "coupon-1");
     await assertSucceeds(getDoc(coupon));
-    await assertSucceeds(updateDoc(coupon, { isUsed: true }));
-    await assertSucceeds(deleteDoc(coupon));
+    const batch = writeBatch(owner);
+    batch.set(doc(coupon, "history", "0"), { record: (await getDoc(coupon)).data(), savedAt: new Date(), userId: "owner" });
+    batch.update(coupon, { deletedAt: new Date(), revision: 1 });
+    await assertSucceeds(batch.commit());
+    await assertFails(deleteDoc(coupon));
+    await assertFails(deleteDoc(doc(coupon, "history", "0")));
+    await assertFails(updateDoc(coupon, { isUsed: true, revision: 2 }));
   });
 
   test("the owner cannot transfer ownership to another account", async () => {

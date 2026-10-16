@@ -10,6 +10,8 @@ import LoginScreen from "./src/screens/auth/LoginScreen";
 import RegisterScreen from "./src/screens/auth/RegisterScreen";
 import HomeScreen from "./src/screens/home/HomeScreen";
 import AddCouponScreen from "./src/screens/home/AddCouponScreen";
+import WalletToolsScreen from "./src/screens/home/WalletToolsScreen";
+import CouponHistoryScreen from "./src/screens/home/CouponHistoryScreen";
 import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
 
 const Stack = createNativeStackNavigator();
@@ -52,6 +54,8 @@ export default function App() {
             component={AddCouponScreen}
             options={{ headerShown: false }}
           />
+          <Stack.Screen name="WalletTools" component={WalletToolsScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="CouponHistory" component={CouponHistoryScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       ) : (
         <Stack.Navigator>

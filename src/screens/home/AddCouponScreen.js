@@ -1,852 +1,185 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ScrollView,
-  Modal,
-  StatusBar,
-  Platform,
-} from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Text, Modal, StyleSheet, Image, ActivityIndicator, Platform } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import { addCoupon } from "../../services/firestoreService";
+import { Page, Field, Button, Choices, ui } from "../../components/WalletUi";
+import BarcodeRenderer from "../../components/BarcodeRenderer";
+import { addCoupon, getCoupon, updateCoupon } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
+import { readLocal, writeLocal } from "../../services/localRecovery";
+import { retainImage, imageDataUri, uploadOriginal } from "../../services/imageService";
+import { recogniseImage } from "../../services/ocrService";
 import { parseVoucherText } from "../../utils/voucherParser";
+import { toDay, daysRemaining } from "../../utils/dateUtils";
+import { BARCODE_TYPES, PROVIDERS, normaliseCoupon } from "../../utils/couponModel";
+import { barcodeSvg } from "../../utils/barcodes";
+import { Alert } from "../../utils/feedback";
+import useCalendarClock from "../../hooks/useCalendarClock";
 
-export default function AddCouponScreen({ navigation }) {
-  const [brand, setBrand] = useState("");
-  const [barcodeNumber, setBarcodeNumber] = useState("");
-
-  const [expiryDate, setExpiryDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 30);
-    d.setHours(23, 59, 59, 999);
-    return d;
-  });
-
-  const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
-  const [pickerYear, setPickerYear] = useState(expiryDate.getFullYear());
-  const [pickerMonth, setPickerMonth] = useState(expiryDate.getMonth() + 1);
-  const [pickerDay, setPickerDay] = useState(expiryDate.getDate());
-
-  // Camera Barcode Scanner State
-  const [isCameraVisible, setIsCameraVisible] = useState(false);
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-
-  // Smart Text Parser Modal State
-  const [isSmartModalVisible, setIsSmartModalVisible] = useState(false);
-  const [smartInputText, setSmartInputText] = useState("");
-
-  const setPresetDays = (days) => {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    d.setHours(23, 59, 59, 999);
-    setExpiryDate(d);
-    setPickerYear(d.getFullYear());
-    setPickerMonth(d.getMonth() + 1);
-    setPickerDay(d.getDate());
-  };
-
-  const openPickerModal = () => {
-    setPickerYear(expiryDate.getFullYear());
-    setPickerMonth(expiryDate.getMonth() + 1);
-    setPickerDay(expiryDate.getDate());
-    setIsDatePickerVisible(true);
-  };
-
-  const confirmCustomDate = () => {
-    const y = parseInt(pickerYear, 10);
-    const m = parseInt(pickerMonth, 10);
-    const d = parseInt(pickerDay, 10);
-
-    const currentYear = new Date().getFullYear();
-
-    if (isNaN(y) || isNaN(m) || isNaN(d)) {
-      Alert.alert("입력 오류", "날짜 숫자를 모두 입력해 주세요.");
-      return;
-    }
-
-    if (y < currentYear || y > currentYear + 20) {
-      Alert.alert("입력 오류", `연도는 ${currentYear}년부터 ${currentYear + 20}년 사이로 입력해 주세요.`);
-      return;
-    }
-
-    if (m < 1 || m > 12) {
-      Alert.alert("입력 오류", "월은 1월부터 12월 사이로 입력해 주세요.");
-      return;
-    }
-
-    const daysInMonth = new Date(y, m, 0).getDate();
-    if (d < 1 || d > daysInMonth) {
-      Alert.alert("입력 오류", `${m}월은 1일부터 ${daysInMonth}일까지 입력 가능합니다.`);
-      return;
-    }
-
-    const customDate = new Date(y, m - 1, d, 23, 59, 59, 999);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (customDate < today) {
-      Alert.alert("유효기간 확인", "오늘 이후의 날짜를 선택해 주세요.");
-      return;
-    }
-
-    setExpiryDate(customDate);
-    setIsDatePickerVisible(false);
-  };
-
-  const handleOpenScanner = async () => {
-    if (Platform.OS === "web") {
-      Alert.alert("안내", "웹 브라우저에서는 바코드 카메라 스캔을 지원하지 않습니다. 직접 번호를 입력해 주세요.");
-      return;
-    }
-
-    if (!cameraPermission?.granted) {
-      const permissionResponse = await requestCameraPermission();
-      if (!permissionResponse.granted) {
-        Alert.alert("권한 필요", "바코드 스캔을 위해 카메라 접근 권한이 필요합니다.");
-        return;
+const initialForm = () => {
+  const date = new Date(); date.setDate(date.getDate() + 30);
+  return { kind: "voucher", brand: "", barcodeNumber: "", barcodeType: "code128", expiryDay: toDay(date),
+    provider: "other", conditions: "", sourceUrl: "", isUsed: false, image: null };
+};
+export default function AddCouponScreen({ navigation, route }) {
+  const id = route.params?.id;
+  const uid = useRef(auth.currentUser?.uid).current;
+  const section = `draft:${id || "new"}`;
+  const [form, setForm] = useState(initialForm);
+  const [revision, setRevision] = useState(0);
+  const [ready, setReady] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [camera, setCamera] = useState(false);
+  const [smart, setSmart] = useState(false);
+  const [text, setText] = useState("");
+  const [permission, requestPermission] = useCameraPermissions();
+  const saving = useRef(false);
+  const scanned = useRef(false);
+  const saved = useRef(false);
+  const now = useCalendarClock();
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const record = id ? await getCoupon(id) : null;
+      const cached = await readLocal(uid, section);
+      if (!active) return;
+      if (record) {
+        setForm({ ...initialForm(), ...record, expiryDay: toDay(record.expiryDay || record.expiryDate) || "" });
+        setRevision(record.revision || 0);
       }
-    }
-
-    setScanned(false);
-    setIsCameraVisible(true);
+      setDraft(cached); setReady(true);
+    })().catch((e) => { if (active) setError(e.message); });
+    return () => { active = false; };
+  }, [id, uid, section]);
+  useEffect(() => {
+    if (!ready || !dirty || saved.current) return;
+    writeLocal(uid, section, { form, revision, savedAt: new Date().toISOString() }).catch(() =>
+      setError("입력 초안을 기기에 보관하지 못했습니다. 저장 공간을 확인해 주세요."));
+  }, [form, revision, ready, dirty, uid, section]);
+  useEffect(() => {
+    let active = true;
+    if (!form.image) { setPreview(null); return; }
+    imageDataUri(form.image).then((uri) => { if (active) setPreview(uri); }).catch(() => { if (active) setPreview(null); });
+    return () => { active = false; };
+  }, [form.image]);
+  const change = (field, value) => { setDirty(true); setForm((current) => ({ ...current, [field]: value })); };
+  const changeFields = (fields) => { setDirty(true); setForm((current) => ({ ...current, ...fields })); };
+  const applyText = () => {
+    const parsed = parseVoucherText(text);
+    const fields = {};
+    if (parsed.brand) fields.brand = parsed.brand;
+    if (parsed.barcodeNumber) { fields.barcodeNumber = parsed.barcodeNumber; fields.barcodeType = "code128"; }
+    if (parsed.expiryDate) fields.expiryDay = toDay(parsed.expiryDate);
+    changeFields(fields); setSmart(false);
+    if (!Object.keys(fields).length) Alert.alert("분석 결과", "자동으로 추출하지 못했습니다. 원본을 확인해 직접 입력해 주세요.");
   };
-
-  const handleBarcodeScanned = ({ data }) => {
-    if (scanned) return;
-    setScanned(true);
-    setIsCameraVisible(false);
-
-    if (data) {
-      const cleanData = String(data).replace(/[\s-]/g, "").trim();
-      setBarcodeNumber(cleanData);
-      Alert.alert("바코드 인식 완료", `바코드 번호: ${cleanData}`);
-    }
+  const openScanner = async () => {
+    if (Platform.OS === "web") return Alert.alert("안내", "웹에서는 바코드를 직접 입력하거나 원본 이미지를 보관해 주세요.");
+    if (!permission?.granted && !(await requestPermission()).granted) return Alert.alert("권한 필요", "카메라 접근 권한을 확인해 주세요.");
+    scanned.current = false; setCamera(true);
   };
-
-  const handleOpenSmartModal = () => {
-    setIsSmartModalVisible(true);
+  const scan = ({ data, type }) => {
+    if (scanned.current) return;
+    scanned.current = true; setCamera(false);
+    if (!BARCODE_TYPES.includes(type)) return Alert.alert("바코드 종류", "지원하지 않는 종류입니다. 원본을 보관해 주세요.");
+    changeFields({ barcodeNumber: String(data), barcodeType: type });
   };
-
-  const handleApplySmartParse = () => {
-    if (!smartInputText.trim()) {
-      Alert.alert("입력 오류", "분석할 쿠폰/기프티콘 텍스트를 입력해 주세요.");
-      return;
-    }
-
-    const parsed = parseVoucherText(smartInputText);
-    const extractedList = [];
-
-    if (parsed.brand) {
-      setBrand(parsed.brand);
-      extractedList.push(`브랜드: ${parsed.brand}`);
-    }
-    if (parsed.barcodeNumber) {
-      setBarcodeNumber(parsed.barcodeNumber);
-      extractedList.push(`바코드: ${parsed.barcodeNumber}`);
-    }
-    if (parsed.expiryDate) {
-      setExpiryDate(parsed.expiryDate);
-      setPickerYear(parsed.expiryDate.getFullYear());
-      setPickerMonth(parsed.expiryDate.getMonth() + 1);
-      setPickerDay(parsed.expiryDate.getDate());
-      extractedList.push(
-        `유효기간: ${parsed.expiryDate.getFullYear()}년 ${parsed.expiryDate.getMonth() + 1}월 ${parsed.expiryDate.getDate()}일`
-      );
-    }
-
-    setIsSmartModalVisible(false);
-    setSmartInputText("");
-
-    if (extractedList.length > 0) {
-      Alert.alert("✨ 스마트 자동 분석 완료", extractedList.join("\n"));
-    } else {
-      Alert.alert(
-        "분석 결과",
-        "인식 가능한 브랜드, 바코드 번호 또는 날짜 패턴을 찾지 못했습니다. 직접 입력해 주세요."
-      );
-    }
-  };
-
-  const handlePickImage = async () => {
+  const pickImage = async () => {
+    if (processing) return;
+    setProcessing(true); setError("");
     try {
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert("권한 필요", "사진을 선택하기 위해 갤러리 접근 권한이 필요합니다.");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        Alert.alert(
-          "이미지 불러오기 완료",
-          "쿠폰 이미지를 선택했습니다. 카카오톡이나 메시지에서 복사한 텍스트가 있다면 '✨ 스마트 텍스트' 기능으로 한 번에 자동 입력할 수 있습니다.",
-          [
-            { text: "확인", style: "default" },
-            {
-              text: "스마트 텍스트 입력",
-              onPress: () => setIsSmartModalVisible(true),
-            },
-          ]
-        );
-      }
-    } catch (err) {
-      console.error("Image pick error:", err);
-      Alert.alert("오류", "이미지를 불러오는 중 문제가 발생했습니다.");
-    }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      const image = await retainImage(asset);
+      change("image", image);
+      try { setText(await recogniseImage(asset.uri)); setSmart(true); }
+      catch (e) { setError(e.message); }
+    } catch (e) { setError(e.message); }
+    finally { setProcessing(false); }
   };
-
-  const handleSave = async () => {
-    const trimmedBrand = brand.trim();
-    const cleanBarcode = barcodeNumber.replace(/[\s-]/g, "").trim();
-
-    if (!trimmedBrand) {
-      Alert.alert("입력 오류", "브랜드명 또는 상품명을 입력해 주세요.");
-      return;
-    }
-    if (!cleanBarcode) {
-      Alert.alert("입력 오류", "바코드 번호를 입력해 주세요.");
-      return;
-    }
-
-    if (!auth.currentUser) {
-      Alert.alert("인증 오류", "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
-      return;
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (expiryDate < today) {
-      Alert.alert("유효기간 오류", "만료일은 오늘 또는 그 이후여야 합니다.");
-      return;
-    }
-
-    const couponData = {
-      brand: trimmedBrand,
-      barcodeNumber: cleanBarcode,
-      expiryDate,
-      isUsed: false,
-      userId: auth.currentUser.uid,
-    };
-
+  const save = async () => {
+    if (saving.current || !ready || processing) return;
+    saving.current = true; setBusy(true); setError("");
     try {
-      await addCoupon(couponData);
+      if (uid !== auth.currentUser?.uid) throw new Error("계정이 변경됐습니다.");
+      const data = normaliseCoupon(form);
+      if (!data.expiryDay) throw new Error("유효한 만료일을 입력해 주세요 (YYYY-MM-DD).");
+      if (data.kind === "voucher") barcodeSvg(data.barcodeNumber, data.barcodeType);
+      // Persist a final recovery draft before attempting the network write.
+      await writeLocal(uid, section, { form, revision, savedAt: new Date().toISOString() });
+      const uploaded = await uploadOriginal(data.image);
+      if (uid !== auth.currentUser?.uid) throw new Error("계정이 변경됐습니다.");
+      if (id) await updateCoupon(id, { ...data, image: uploaded.image }, revision);
+      else await addCoupon({ ...data, image: uploaded.image });
+      saved.current = true;
+      try { await writeLocal(uid, section, null); }
+      catch { Alert.alert("저장 완료", "쿠폰은 저장됐지만 기기 초안을 정리하지 못했습니다. 같은 쿠폰은 중복 등록되지 않습니다."); }
+      if (uploaded.localOnly) Alert.alert("원본은 이 기기에 보관됨", "쿠폰은 저장됐습니다. 원본 이미지의 클라우드 보관은 확인하지 못했습니다. 보관·복원에서 이미지 포함 JSON 백업을 별도로 저장해 주세요.");
       navigation.goBack();
-    } catch (error) {
-      Alert.alert("등록 실패", error.message || "쿠폰 저장 중 오류가 발생했습니다.");
-      console.error("Save error:", error);
-    }
+    } catch (e) { setError(e.message); }
+    finally { saving.current = false; setBusy(false); }
   };
-
-  const formattedExpiry = `${expiryDate.getFullYear()}년 ${expiryDate.getMonth() + 1}월 ${expiryDate.getDate()}일`;
-
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const expClone = new Date(expiryDate);
-  expClone.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((expClone.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← 뒤로</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>새 쿠폰 등록</Text>
-        <View style={styles.headerSpacer} />
+  const remaining = daysRemaining(form.expiryDay, now);
+  return <Page title={id ? "쿠폰 수정" : "쿠폰·이벤트 등록"} navigation={navigation}>
+    {!ready && !error && <ActivityIndicator color="#6366F1" />}
+    {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
+    {draft && <View style={ui.card}>
+      <Text style={ui.note}>저장하지 못한 입력 초안이 있습니다. ({draft.savedAt?.slice(0, 16)})</Text>
+      <Button label="입력 초안 복원" secondary disabled={busy} onPress={() => {
+        setForm({ ...initialForm(), ...draft.form }); setRevision(draft.revision || 0); setDirty(true); setDraft(null);
+      }} />
+    </View>}
+    <Choices options={[["voucher", "정적 쿠폰"], ["external", "앱 결제 이벤트"]]} value={form.kind} onChange={(value) => change("kind", value)} disabled={busy || !ready} />
+    {form.kind === "external" && <Text style={ui.note}>결제·멤버십 바코드는 원래 앱에서 확인하세요. 여기에는 이벤트 조건과 안내 페이지를 보관하며, 결제나 사용 여부를 자동으로 확인하지 않습니다.</Text>}
+    <View style={ui.row}>
+      {form.kind === "voucher" && <Button label="바코드 스캔" secondary onPress={openScanner} disabled={busy || !ready} />}
+      <Button label="텍스트 분석" secondary onPress={() => setSmart(true)} disabled={busy || !ready} />
+      <Button label={processing ? "이미지 인식 중..." : "이미지 보관·인식"} secondary onPress={pickImage} disabled={busy || processing || !ready} />
+    </View>
+    <Field label="브랜드·상품명 / 이벤트명" value={form.brand} onChangeText={(v) => change("brand", v)} maxLength={200} editable={ready && !busy} />
+    {form.kind === "voucher" && <>
+      <Text style={ui.label}>바코드 종류</Text>
+      <Choices options={BARCODE_TYPES.map((t) => [t, t.toUpperCase()])} value={form.barcodeType} onChange={(v) => change("barcodeType", v)} disabled={busy || !ready} />
+      <Field label="바코드 원문 (공백·하이픈도 보존)" value={form.barcodeNumber} onChangeText={(v) => change("barcodeNumber", v)}
+        autoCapitalize="none" autoCorrect={false} maxLength={4096} multiline={form.barcodeType === "qr"} editable={ready && !busy} />
+      <BarcodeRenderer value={form.barcodeNumber} type={form.barcodeType} height={75} />
+    </>}
+    {form.kind === "external" && <>
+      <Text style={ui.label}>제공사</Text>
+      <Choices options={Object.entries(PROVIDERS).map(([key, p]) => [key, p.label])} value={form.provider}
+        onChange={(provider) => changeFields({ provider, sourceUrl: PROVIDERS[provider].url })} disabled={busy || !ready} />
+    </>}
+    <Field label="만료일 (YYYY-MM-DD)" value={form.expiryDay} onChangeText={(v) => change("expiryDay", v)} placeholder="2026-12-31" maxLength={10} editable={ready && !busy} />
+    <Text style={remaining !== null && remaining < 0 ? ui.error : ui.note}>{remaining === null ? "유효한 날짜를 입력해 주세요." : remaining < 0 ? "이미 만료된 쿠폰입니다. 보관 목적으로 저장할 수 있습니다." : remaining === 0 ? "오늘 만료" : `D-${remaining}`}</Text>
+    <View style={ui.row}>{[7, 30, 90, 365].map((days) => <Button key={days} label={`+${days}일`} secondary disabled={busy || !ready}
+      onPress={() => { const d = new Date(); d.setDate(d.getDate() + days); change("expiryDay", toDay(d)); }} />)}</View>
+    <Field label="이용 조건·메모" value={form.conditions} onChangeText={(v) => change("conditions", v)} multiline maxLength={5000} editable={ready && !busy} />
+    <Field label="공식 안내 페이지 (https)" value={form.sourceUrl} onChangeText={(v) => change("sourceUrl", v)} autoCapitalize="none" autoCorrect={false} editable={ready && !busy} />
+    {preview && <View style={ui.card}><Image source={{ uri: preview }} resizeMode="contain" style={{ height: 300, width: "100%" }} /><Text style={ui.note}>선택한 원본은 이 기기에 보관됐습니다. 저장 후 클라우드 업로드 결과를 확인해 주세요.</Text>
+      <Button label="첨부 해제 (보관된 원본 유지)" secondary disabled={busy} onPress={() => change("image", null)} /></View>}
+    {!!form.image && !preview && <Text style={ui.note}>원본 미리보기를 불러오지 못했습니다. 첨부 참조는 유지됩니다.</Text>}
+    <Button label={busy ? "저장 중..." : id ? "변경 저장" : "등록하기"} onPress={save} disabled={busy || processing || !ready} />
+    <Text style={ui.note}>미완성 입력은 계정별로 이 기기에 임시 저장됩니다. 기기 분실·앱 삭제에 대비하려면 보관·복원에서 JSON 백업을 외부에 저장해 주세요.</Text>
+    <Modal visible={camera} onRequestClose={() => setCamera(false)}>
+      <View style={{ flex: 1, backgroundColor: "black" }}>
+        {camera && <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }} onBarcodeScanned={scan} />}
+        <View style={{ padding: 40 }}><Button label="스캔 닫기" onPress={() => setCamera(false)} /></View>
       </View>
-
-      {/* Quick Input Actions */}
-      <View style={styles.quickActionRow}>
-        <TouchableOpacity style={styles.quickScanButton} onPress={handleOpenScanner}>
-          <Text style={styles.quickScanText}>📷 바코드 스캔</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickSmartButton} onPress={handleOpenSmartModal}>
-          <Text style={styles.quickSmartText}>✨ 스마트 텍스트</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickImageButton} onPress={handlePickImage}>
-          <Text style={styles.quickImageText}>🖼️ 갤러리</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Brand Input */}
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>브랜드명 / 상품명</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="예: 스타벅스, 배스킨라빈스, 올리브영"
-          placeholderTextColor="#94A3B8"
-          value={brand}
-          onChangeText={setBrand}
-        />
-      </View>
-
-      {/* Barcode Number Input */}
-      <View style={styles.formGroup}>
-        <Text style={styles.label}>바코드 번호</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="숫자 바코드 번호 (예: 123456789012)"
-          placeholderTextColor="#94A3B8"
-          value={barcodeNumber}
-          onChangeText={setBarcodeNumber}
-          keyboardType="numeric"
-          maxLength={30}
-        />
-      </View>
-
-      {/* Expiry Date Section */}
-      <View style={styles.formGroup}>
-        <View style={styles.labelRow}>
-          <Text style={styles.label}>유효기간</Text>
-          <Text style={styles.diffDaysText}>
-            {diffDays === 0 ? "D-Day (오늘)" : `D-${diffDays}`}
-          </Text>
-        </View>
-
-        <TouchableOpacity style={styles.dateDisplayBox} onPress={openPickerModal}>
-          <View>
-            <Text style={styles.dateDisplayLabel}>선택된 유효기간</Text>
-            <Text style={styles.dateDisplayText}>{formattedExpiry}</Text>
-          </View>
-          <Text style={styles.dateChangeButtonText}>변경</Text>
-        </TouchableOpacity>
-
-        {/* Quick Presets */}
-        <Text style={styles.presetLabel}>빠른 설정</Text>
-        <View style={styles.presetsRow}>
-          {[
-            { label: "+7일", days: 7 },
-            { label: "+30일", days: 30 },
-            { label: "+90일", days: 90 },
-            { label: "+1년", days: 365 },
-          ].map((preset) => (
-            <TouchableOpacity
-              key={preset.days}
-              style={styles.presetChip}
-              onPress={() => setPresetDays(preset.days)}
-            >
-              <Text style={styles.presetChipText}>{preset.label}</Text>
-            </TouchableOpacity>
-          ))}
+    </Modal>
+    <Modal visible={smart} transparent animationType="fade" onRequestClose={() => setSmart(false)}>
+      <View style={{ flex: 1, backgroundColor: "#0008", justifyContent: "center", padding: 20 }}>
+        <View style={ui.card}><Text style={ui.heading}>쿠폰 텍스트 분석</Text>
+          <Text style={ui.note}>인식 결과를 확인하세요. OCR은 틀릴 수 있으므로 바코드·날짜는 원본과 대조해 주세요.</Text>
+          <Field label="쿠폰 메시지·인식된 텍스트" value={text} onChangeText={setText} multiline />
+          <Button label="분석해 입력란에 적용" onPress={applyText} /><Button label="닫기" secondary onPress={() => setSmart(false)} />
         </View>
       </View>
-
-      {/* Action Buttons */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.cancelButtonText}>취소</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>쿠폰 등록하기</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Custom Date Picker Modal */}
-      <Modal
-        visible={isDatePickerVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsDatePickerVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>유효기간 직접 입력</Text>
-            <Text style={styles.modalSubtitle}>연도, 월, 일을 입력해 주세요.</Text>
-
-            <View style={styles.dateInputRow}>
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputSubLabel}>년 (YYYY)</Text>
-                <TextInput
-                  style={styles.dateNumericInput}
-                  value={String(pickerYear)}
-                  onChangeText={(val) => setPickerYear(val.replace(/[^0-9]/g, ""))}
-                  keyboardType="numeric"
-                  maxLength={4}
-                />
-              </View>
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputSubLabel}>월 (MM)</Text>
-                <TextInput
-                  style={styles.dateNumericInput}
-                  value={String(pickerMonth)}
-                  onChangeText={(val) => setPickerMonth(val.replace(/[^0-9]/g, ""))}
-                  keyboardType="numeric"
-                  maxLength={2}
-                />
-              </View>
-              <View style={styles.dateInputGroup}>
-                <Text style={styles.dateInputSubLabel}>일 (DD)</Text>
-                <TextInput
-                  style={styles.dateNumericInput}
-                  value={String(pickerDay)}
-                  onChangeText={(val) => setPickerDay(val.replace(/[^0-9]/g, ""))}
-                  keyboardType="numeric"
-                  maxLength={2}
-                />
-              </View>
-            </View>
-
-            <View style={styles.modalActionRow}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setIsDatePickerVisible(false)}
-              >
-                <Text style={styles.modalCancelText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmButton}
-                onPress={confirmCustomDate}
-              >
-                <Text style={styles.modalConfirmText}>적용</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Camera Barcode Scanner Modal */}
-      <Modal
-        visible={isCameraVisible}
-        animationType="slide"
-        onRequestClose={() => setIsCameraVisible(false)}
-      >
-        <View style={styles.cameraContainer}>
-          <StatusBar barStyle="light-content" backgroundColor="#000" />
-          <CameraView
-            style={StyleSheet.absoluteFillObject}
-            facing="back"
-            barcodeScannerSettings={{
-              barcodeTypes: [
-                "code128",
-                "code39",
-                "ean13",
-                "ean8",
-                "qr",
-                "upc_a",
-                "upc_e",
-              ],
-            }}
-            onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-          />
-          <View style={styles.cameraOverlay}>
-            <View style={styles.scannerTargetBox} />
-            <Text style={styles.scannerInstruction}>
-              네모 상자 안에 바코드를 맞춰 주세요.
-            </Text>
-            <TouchableOpacity
-              style={styles.cameraCloseButton}
-              onPress={() => setIsCameraVisible(false)}
-            >
-              <Text style={styles.cameraCloseText}>닫기</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Smart Voucher Text Parser Modal */}
-      <Modal
-        visible={isSmartModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsSmartModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>✨ 스마트 텍스트 자동 분석</Text>
-            <Text style={styles.modalSubtitle}>
-              카카오톡 선물하기, 기프티콘, SMS 메시지 또는 OCR 텍스트를 붙여넣으시면 브랜드, 바코드, 유효기간을 자동으로 분석하여 채워줍니다.
-            </Text>
-
-            <TextInput
-              style={styles.smartTextArea}
-              placeholder="여기에 쿠폰 메시지를 붙여넣어 주세요..."
-              placeholderTextColor="#94A3B8"
-              value={smartInputText}
-              onChangeText={setSmartInputText}
-              multiline={true}
-              numberOfLines={5}
-              textAlignVertical="top"
-            />
-
-            <View style={styles.modalActionRow}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setIsSmartModalVisible(false)}
-              >
-                <Text style={styles.modalCancelText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmButton}
-                onPress={handleApplySmartParse}
-              >
-                <Text style={styles.modalConfirmText}>자동 분석 및 채우기</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </ScrollView>
-  );
+    </Modal>
+  </Page>;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-  },
-  contentContainer: {
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  backButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: "#EEF2FF",
-  },
-  backButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#6366F1",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  headerSpacer: {
-    width: 50,
-  },
-  quickActionRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 22,
-  },
-  quickScanButton: {
-    flex: 1,
-    backgroundColor: "#EEF2FF",
-    borderWidth: 1,
-    borderColor: "#C7D2FE",
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  quickScanText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#4F46E5",
-  },
-  quickSmartButton: {
-    flex: 1.2,
-    backgroundColor: "#F5F3FF",
-    borderWidth: 1,
-    borderColor: "#DDD6FE",
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  quickSmartText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#7C3AED",
-  },
-  quickImageButton: {
-    flex: 0.9,
-    backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  quickImageText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#475569",
-  },
-  formGroup: {
-    marginBottom: 22,
-  },
-  labelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#334155",
-    marginBottom: 8,
-  },
-  diffDaysText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#6366F1",
-  },
-  input: {
-    backgroundColor: "#FFF",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 12,
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    color: "#0F172A",
-  },
-  dateDisplayBox: {
-    backgroundColor: "#FFF",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  dateDisplayLabel: {
-    fontSize: 12,
-    color: "#64748B",
-    marginBottom: 2,
-  },
-  dateDisplayText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  dateChangeButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#6366F1",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: "#EEF2FF",
-  },
-  presetLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#64748B",
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  presetsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  presetChip: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: "#FFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    alignItems: "center",
-  },
-  presetChipText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#475569",
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 16,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: "#F1F5F9",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  saveButton: {
-    flex: 2,
-    backgroundColor: "#6366F1",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    shadowColor: "#6366F1",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  cancelButtonText: {
-    color: "#64748B",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  saveButtonText: {
-    color: "#FFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  modalContent: {
-    backgroundColor: "#FFF",
-    width: "100%",
-    borderRadius: 16,
-    padding: 22,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0F172A",
-    marginBottom: 4,
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: "#64748B",
-    marginBottom: 18,
-  },
-  dateInputRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 20,
-  },
-  dateInputGroup: {
-    flex: 1,
-  },
-  dateInputSubLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748B",
-    marginBottom: 4,
-  },
-  dateNumericInput: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-    textAlign: "center",
-  },
-  modalActionRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
-    alignItems: "center",
-  },
-  modalCancelText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#64748B",
-  },
-  modalConfirmButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#6366F1",
-    alignItems: "center",
-  },
-  modalConfirmText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#FFF",
-  },
-  cameraContainer: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  cameraOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  scannerTargetBox: {
-    width: 280,
-    height: 180,
-    borderWidth: 2,
-    borderColor: "#6366F1",
-    borderRadius: 16,
-    backgroundColor: "transparent",
-  },
-  scannerInstruction: {
-    color: "#FFF",
-    fontSize: 14,
-    fontWeight: "600",
-    marginTop: 20,
-    textAlign: "center",
-  },
-  cameraCloseButton: {
-    marginTop: 40,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-  },
-  cameraCloseText: {
-    color: "#FFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  smartTextArea: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 14,
-    color: "#0F172A",
-    height: 120,
-    width: "100%",
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-});
