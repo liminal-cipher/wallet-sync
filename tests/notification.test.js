@@ -175,3 +175,17 @@ test("a failed native operation does not block the next reconciliation", async (
   await service.reconcileCouponNotifications("owner", [coupon()]);
   expect(scheduled.size).toBe(3);
 });
+test("custom preferences use calendar dates, exclude trash and cancel reminders when disabled", async () => {
+  await service.reconcileCouponNotifications("owner", [coupon({ expiryDay: "2026-11-02" }), coupon({ id: "trash", deletedAt: new Date() })], { enabled: true, hour: 18, minute: 45, days: [1, 0] });
+  expect([...scheduled.values()].map((request) => request.trigger.date)).toEqual([new Date(2026, 10, 1, 18, 45), new Date(2026, 10, 2, 18, 45)]);
+  await service.reconcileCouponNotifications("owner", [coupon()], { enabled: false, hour: 9, minute: 0, days: [0] });
+  expect(scheduled.size).toBe(0);
+});
+test("iOS keeps the nearest 60 reminders within the app's scheduling budget", async () => {
+  Platform.OS = "ios";
+  const coupons = Array.from({ length: 25 }, (_, index) => coupon({ id: `coupon-${index}`, expiryDay: `2026-11-${String(index + 1).padStart(2, "0")}` }));
+  await service.reconcileCouponNotifications("owner", coupons);
+  expect(scheduled.size).toBe(60);
+  const dates = [...scheduled.values()].map((request) => request.trigger.date.getTime());
+  expect(dates).toEqual([...dates].sort((a, b) => a - b));
+});

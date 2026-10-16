@@ -1,5 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { toDate } from "../utils/dateUtils";
+import { DEFAULT_REMINDERS } from "./reminderSettings";
 
 // Configure foreground notification presentation
 Notifications.setNotificationHandler({
@@ -57,26 +59,22 @@ const isCouponNotification = (notification) => {
   return data?.type === NOTIFICATION_TYPE || typeof data?.couponId === "string";
 };
 
-const createExpiryRequests = (userId, coupon, now) => {
-  if (!coupon.id || coupon.userId !== userId || coupon.isUsed || !coupon.expiryDate) {
+const createExpiryRequests = (userId, coupon, now, settings) => {
+  if (!settings.enabled || !coupon.id || coupon.userId !== userId || coupon.isUsed || coupon.deletedAt || !(coupon.expiryDay || coupon.expiryDate)) {
     return [];
   }
-  const expDate = typeof coupon.expiryDate.toDate === "function"
-    ? coupon.expiryDate.toDate()
-    : new Date(coupon.expiryDate);
-  if (isNaN(expDate.getTime())) return [];
+  const expDate = toDate(coupon.expiryDay || coupon.expiryDate);
+  if (!expDate) return [];
 
-  // Define notification trigger targets (at 09:00 AM)
-  const targets = [
-    { daysBefore: 7, title: "쿠폰 만료 7일 전", body: `'${coupon.brand}' 쿠폰 유효기간이 7일 남았습니다.` },
-    { daysBefore: 3, title: "쿠폰 만료 3일 전", body: `'${coupon.brand}' 쿠폰 유효기간이 3일 남았습니다. 잊지 말고 사용하세요.` },
-    { daysBefore: 0, title: "쿠폰 만료 D-Day", body: `'${coupon.brand}' 쿠폰이 오늘 자정에 만료됩니다.` },
-  ];
+  const targets = settings.days.map((daysBefore) => ({ daysBefore,
+    title: daysBefore ? `쿠폰 만료 ${daysBefore}일 전` : "쿠폰 만료 D-Day",
+    body: `'${coupon.brand}' ${daysBefore ? `만료까지 ${daysBefore}일 남았습니다.` : "오늘 만료됩니다."}`,
+  }));
 
   return targets.flatMap((target) => {
     const triggerDate = new Date(expDate);
     triggerDate.setDate(triggerDate.getDate() - target.daysBefore);
-    triggerDate.setHours(9, 0, 0, 0);
+    triggerDate.setHours(settings.hour, settings.minute, 0, 0);
 
     if (triggerDate.getTime() <= now.getTime()) return [];
     return [{
@@ -115,16 +113,22 @@ export const clearCouponNotifications = (userIdToKeep = null) => {
   });
 };
 
-export const reconcileCouponNotifications = (userId, coupons) => {
+export const reconcileCouponNotifications = (userId, coupons, settings = DEFAULT_REMINDERS) => {
   if (Platform.OS === "web" || !userId) return Promise.resolve();
   return enqueue(async () => {
     const { status } = await Notifications.getPermissionsAsync();
     const now = new Date();
-    const requests = status === "granted"
-      ? coupons.flatMap((coupon) => createExpiryRequests(userId, coupon, now))
+    let requests = status === "granted"
+      ? coupons.flatMap((coupon) => createExpiryRequests(userId, coupon, now, settings))
       : [];
-    const desired = new Map(requests.map((request) => [request.identifier, request]));
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    // Reserve space for other notification categories and schedule the nearest
+    // reminders first. Foreground/snapshot reconciliation replenishes the queue.
+    if (Platform.OS === "ios") {
+      const otherCount = scheduled.filter((item) => !isCouponNotification(item)).length;
+      requests = requests.sort((a, b) => a.trigger.date - b.trigger.date).slice(0, Math.max(0, 60 - otherCount));
+    }
+    const desired = new Map(requests.map((request) => [request.identifier, request]));
 
     for (const notification of scheduled) {
       if (!isCouponNotification(notification)) continue;

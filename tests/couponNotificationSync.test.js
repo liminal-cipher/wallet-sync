@@ -4,6 +4,10 @@ jest.mock("react-native", () => ({
 }));
 jest.mock("firebase/auth", () => ({ onAuthStateChanged: jest.fn() }));
 jest.mock("../src/services/firebase", () => ({ auth: {} }));
+jest.mock("../src/services/reminderSettings", () => ({
+  loadReminderSettings: jest.fn().mockResolvedValue({ enabled: true, hour: 9, minute: 0, days: [7, 3, 0] }),
+  observeReminderSettings: jest.fn(() => jest.fn()),
+}));
 jest.mock("../src/services/firestoreService", () => ({ subscribeCoupons: jest.fn() }));
 jest.mock("../src/services/notificationService", () => ({
   requestNotificationPermissions: jest.fn(),
@@ -15,6 +19,7 @@ const { AppState, Platform } = require("react-native");
 const { onAuthStateChanged } = require("firebase/auth");
 const { subscribeCoupons } = require("../src/services/firestoreService");
 const notifications = require("../src/services/notificationService");
+const { loadReminderSettings, observeReminderSettings } = require("../src/services/reminderSettings");
 const { startCouponNotificationSync } = require("../src/services/couponNotificationSync");
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 let authChanged;
@@ -46,6 +51,7 @@ beforeEach(() => {
   notifications.requestNotificationPermissions.mockResolvedValue(true);
   notifications.clearCouponNotifications.mockResolvedValue();
   notifications.reconcileCouponNotifications.mockResolvedValue();
+  loadReminderSettings.mockResolvedValue({ enabled: true, hour: 9, minute: 0, days: [7, 3, 0] });
 });
 
 afterEach(() => { if (stop) stop(); stop = null; });
@@ -57,10 +63,10 @@ test("snapshots reconcile reminders independently of the current screen", async 
   subscriptions[0].callback(coupons);
   await flush();
   expect(notifications.clearCouponNotifications).toHaveBeenCalledWith("owner");
-  expect(notifications.reconcileCouponNotifications).toHaveBeenLastCalledWith("owner", coupons);
+  expect(notifications.reconcileCouponNotifications).toHaveBeenLastCalledWith("owner", coupons, expect.objectContaining({ hour: 9 }));
   subscriptions[0].callback([]);
   await flush();
-  expect(notifications.reconcileCouponNotifications).toHaveBeenLastCalledWith("owner", []);
+  expect(notifications.reconcileCouponNotifications).toHaveBeenLastCalledWith("owner", [], expect.objectContaining({ hour: 9 }));
 });
 
 test("sign-out rejects delayed work while a permission request is in flight", async () => {
@@ -69,6 +75,7 @@ test("sign-out rejects delayed work while a permission request is in flight", as
   stop = startCouponNotificationSync();
   authChanged({ uid: "owner" });
   subscriptions[0].callback([{ id: "coupon-1" }]);
+  await flush();
   authChanged(null);
   grantPermission(true);
   await flush();
@@ -86,7 +93,7 @@ test("account switching ignores callbacks left over from the previous account", 
   await flush();
   expect(subscriptions[0].unsubscribe).toHaveBeenCalled();
   expect(notifications.reconcileCouponNotifications).toHaveBeenCalledTimes(1);
-  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("other", [{ id: "new" }]);
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("other", [{ id: "new" }], expect.objectContaining({ hour: 9 }));
 });
 
 test("returning to the foreground reconciles the cached snapshot and refreshed permissions", async () => {
@@ -100,7 +107,7 @@ test("returning to the foreground reconciles the cached snapshot and refreshed p
   expect(notifications.reconcileCouponNotifications).not.toHaveBeenCalled();
   foregroundChanged("active");
   await flush();
-  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("owner", [{ id: "coupon-1" }]);
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("owner", [{ id: "coupon-1" }], expect.objectContaining({ hour: 9 }));
 });
 
 test("cleanup removes listeners and prevents late callbacks from scheduling", async () => {
@@ -124,4 +131,24 @@ test("web installs no native reminder listeners", () => {
   expect(onAuthStateChanged).not.toHaveBeenCalled();
   expect(AppState.addEventListener).not.toHaveBeenCalled();
   expect(notifications.requestNotificationPermissions).not.toHaveBeenCalled();
+});
+test("signed-out and disabled accounts do not request notification permission", async () => {
+  stop = startCouponNotificationSync();
+  expect(notifications.requestNotificationPermissions).not.toHaveBeenCalled();
+  loadReminderSettings.mockResolvedValue({ enabled: false, hour: 9, minute: 0, days: [0] });
+  authChanged({ uid: "owner" }); subscriptions[0].callback([]);
+  await flush();
+  expect(notifications.requestNotificationPermissions).not.toHaveBeenCalled();
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("owner", [], expect.objectContaining({ enabled: false }));
+});
+test("disabling reminders supersedes an earlier refresh waiting for permission", async () => {
+  let grant;
+  notifications.requestNotificationPermissions.mockReturnValue(new Promise((resolve) => { grant = resolve; }));
+  stop = startCouponNotificationSync(); authChanged({ uid: "owner" }); subscriptions[0].callback([{ id: "coupon-1" }]);
+  await flush();
+  loadReminderSettings.mockResolvedValue({ enabled: false, hour: 9, minute: 0, days: [0] });
+  observeReminderSettings.mock.calls[0][0]("owner"); await flush();
+  grant(true); await flush();
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledTimes(1);
+  expect(notifications.reconcileCouponNotifications).toHaveBeenLastCalledWith("owner", [{ id: "coupon-1" }], expect.objectContaining({ enabled: false }));
 });

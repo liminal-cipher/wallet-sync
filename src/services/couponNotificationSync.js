@@ -2,6 +2,7 @@ import { AppState, Platform } from "react-native";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { subscribeCoupons } from "./firestoreService";
+import { loadReminderSettings, observeReminderSettings } from "./reminderSettings";
 import {
   requestNotificationPermissions,
   clearCouponNotifications,
@@ -13,17 +14,24 @@ export const startCouponNotificationSync = () => {
   if (Platform.OS === "web") return () => {};
   let disposed = false;
   let generation = 0;
+  let refreshSequence = 0;
   let userId = null;
   let latestCoupons = null;
   let stopCoupons = () => {};
-  const permissionsReady = requestNotificationPermissions();
+  let permissionsReady = null;
   const reportError = (error) => console.error("Coupon notification sync error:", error);
 
   const refresh = async () => {
+    const sequence = ++refreshSequence;
     const currentGeneration = generation;
-    await permissionsReady;
-    if (!disposed && currentGeneration === generation && userId && latestCoupons !== null) {
-      await reconcileCouponNotifications(userId, latestCoupons);
+    const settings = userId ? await loadReminderSettings(userId) : null;
+    if (disposed || currentGeneration !== generation || sequence !== refreshSequence || !userId || !settings) return;
+    if (settings.enabled) {
+      permissionsReady ||= requestNotificationPermissions();
+      await permissionsReady;
+    }
+    if (!disposed && currentGeneration === generation && sequence === refreshSequence && userId && latestCoupons !== null) {
+      await reconcileCouponNotifications(userId, latestCoupons, settings);
     }
   };
 
@@ -47,12 +55,14 @@ export const startCouponNotificationSync = () => {
   const foreground = AppState.addEventListener("change", (state) => {
     if (state === "active") refresh().catch(reportError);
   });
+  const stopSettings = observeReminderSettings((uid) => { if (uid === userId) refresh().catch(reportError); });
 
   return () => {
     disposed = true;
     generation++;
     stopAuth();
     stopCoupons();
+    stopSettings();
     foreground.remove();
   };
 };
