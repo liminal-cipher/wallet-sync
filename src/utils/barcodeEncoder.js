@@ -110,7 +110,8 @@ const CODE128_PATTERNS = [
 ];
 
 const encodeCode128B = (rawText) => {
-  const sanitized = String(rawText || "").replace(/[^\x20-\x7E]/g, "");
+  const sanitized = String(rawText || "");
+  if (/[^\x20-\x7E]/.test(sanitized)) throw new Error("Code 128 requires printable ASCII.");
 
   const codes = [];
   for (let i = 0; i < sanitized.length; i++) {

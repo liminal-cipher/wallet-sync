@@ -1,56 +1,46 @@
-const getExpiryInfo = (expiryDate, isUsed) => {
-  if (isUsed) {
-    return { text: "사용 완료", color: "#64748B", bg: "#F1F5F9", border: "#CBD5E1" };
+// Calendar dates deliberately have no UTC offset. Legacy timestamps remain readable.
+const toDate = (value) => {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split("-").map(Number);
+    const date = new Date(y, m - 1, d, 12);
+    return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d ? date : null;
   }
-  if (!expiryDate) {
-    return { text: "만료일 없음", color: "#10B981", bg: "#ECFDF5", border: "#6EE7B7" };
-  }
-
-  const exp = typeof expiryDate.toDate === "function" ? expiryDate.toDate() : new Date(expiryDate);
-  if (isNaN(exp.getTime())) {
-    return { text: "만료일 미정", color: "#64748B", bg: "#F1F5F9", border: "#CBD5E1" };
-  }
-
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const expZero = new Date(exp);
-  expZero.setHours(0, 0, 0, 0);
-
-  const diffTime = expZero.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) {
-    return { text: "만료됨", color: "#E11D48", bg: "#FFE4E6", border: "#FDA4AF" };
-  }
-  if (diffDays === 0) {
-    return { text: "D-Day (오늘)", color: "#EA580C", bg: "#FFEDD5", border: "#FDBA74" };
-  }
-  return {
-    text: `D-${diffDays}`,
-    color: "#059669",
-    bg: "#D1FAE5",
-    border: "#6EE7B7",
-  };
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 };
-
-/**
- * Sorts coupon objects in memory by expiryDate in ascending order.
- * Handles Firestore Timestamp objects and standard Date/ISO strings.
- */
-const sortCouponsByExpiry = (coupons) => {
-  if (!Array.isArray(coupons)) return [];
-  return [...coupons].sort((a, b) => {
-    const getMillis = (val) => {
-      if (!val) return 0;
-      if (typeof val.toDate === "function") return val.toDate().getTime();
-      const t = new Date(val).getTime();
-      return isNaN(t) ? 0 : t;
-    };
-    return getMillis(a.expiryDate) - getMillis(b.expiryDate);
-  });
+const toDay = (value) => {
+  const date = toDate(value);
+  return date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` : null;
 };
-
-module.exports = {
-  getExpiryInfo,
-  sortCouponsByExpiry,
+const dayNumber = (value) => {
+  const d = toDate(value);
+  return d ? Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000 : null;
 };
+const daysRemaining = (value, now = new Date()) => {
+  const expiry = dayNumber(value);
+  return expiry === null ? null : expiry - dayNumber(now);
+};
+const getExpiryInfo = (expiryDate, isUsed, now = new Date()) => {
+  const neutral = { color: "#64748B", bg: "#F1F5F9", border: "#CBD5E1" };
+  if (isUsed) return { ...neutral, text: "사용 완료" };
+  if (!expiryDate) return { text: "만료일 없음", color: "#10B981", bg: "#ECFDF5", border: "#6EE7B7" };
+  const days = daysRemaining(expiryDate, now);
+  if (days === null) return { ...neutral, text: "만료일 미정" };
+  if (days < 0) return { text: "만료됨", color: "#E11D48", bg: "#FFE4E6", border: "#FDA4AF" };
+  if (days === 0) return { text: "D-Day (오늘)", color: "#EA580C", bg: "#FFEDD5", border: "#FDBA74" };
+  return { text: `D-${days}`, color: "#059669", bg: "#D1FAE5", border: "#6EE7B7" };
+};
+const sortCouponsByExpiry = (coupons) => !Array.isArray(coupons) ? [] : [...coupons].sort((a, b) =>
+  (dayNumber(a.expiryDay || a.expiryDate) ?? 0) - (dayNumber(b.expiryDay || b.expiryDate) ?? 0));
+const filterCoupons = (coupons, filter, search = "", now = new Date()) => coupons.filter((c) => {
+  if (c.deletedAt || !(c.brand || "").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) return false;
+  const days = daysRemaining(c.expiryDay || c.expiryDate, now);
+  if (filter === "used") return c.isUsed;
+  if (filter === "expired") return !c.isUsed && days !== null && days < 0;
+  if (filter === "soon") return !c.isUsed && days !== null && days >= 0 && days <= 7;
+  if (filter === "active") return !c.isUsed && (days === null || days >= 0);
+  return true;
+});
+module.exports = { toDate, toDay, dayNumber, daysRemaining, getExpiryInfo, sortCouponsByExpiry, filterCoupons };

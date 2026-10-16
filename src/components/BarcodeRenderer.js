@@ -1,77 +1,30 @@
-import React from "react";
-import { View, StyleSheet, ScrollView } from "react-native";
-import { encodeCode128B } from "../utils/barcodeEncoder";
+import React, { useMemo } from "react";
+import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { SvgXml } from "react-native-svg";
+import { barcodeSvg } from "../utils/barcodes";
+export { encodeCode128B } from "../utils/barcodeEncoder";
 
-export { encodeCode128B };
-
-export default function BarcodeRenderer({
-  value = "",
-  height = 54,
-  moduleWidth = 1.4,
-  maxContainerWidth,
-  barColor = "#0F172A",
-  spaceColor = "#FFFFFF",
-  containerStyle,
-}) {
-  if (!value) {
-    return null;
-  }
-
-  const { barElements, totalModules } = encodeCode128B(String(value));
-  if (barElements.length === 0 || totalModules === 0) {
-    return null;
-  }
-
-  // Calculate dynamic module width if maxContainerWidth is provided
-  let effectiveModuleWidth = moduleWidth;
-  if (maxContainerWidth && maxContainerWidth > 0) {
-    const availableWidth = maxContainerWidth - 16;
-    const fitWidth = availableWidth / totalModules;
-    effectiveModuleWidth = Math.min(moduleWidth, Math.max(0.8, fitWidth));
-  }
-
-  return (
-    <View style={[styles.wrapper, containerStyle]}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={[styles.barcodeRow, { height }]}>
-          {barElements.map((elem, idx) => (
-            <View
-              key={idx}
-              style={{
-                width: elem.width * effectiveModuleWidth,
-                height: "100%",
-                backgroundColor: elem.isBar ? barColor : spaceColor,
-              }}
-            />
-          ))}
-        </View>
-      </ScrollView>
-    </View>
-  );
+export default function BarcodeRenderer({ value = "", type = "code128", height = 70, maxContainerWidth = 300, containerStyle }) {
+  const result = useMemo(() => {
+    if (!value) return {};
+    try {
+      const xml = barcodeSvg(value, type);
+      const bounds = xml.match(/viewBox="0 0 (\d+) (\d+)"/);
+      const ratio = bounds ? Number(bounds[1]) / Number(bounds[2]) : 3;
+      const displayHeight = type === "qr" ? Math.max(160, height) : height;
+      return { xml, height: displayHeight, width: Math.max(displayHeight * ratio, type === "qr" ? 160 : 180) };
+    } catch (error) { return { error: error.message }; }
+  }, [value, type, height]);
+  if (!value) return null;
+  return <View style={[styles.wrapper, containerStyle]}>
+    {result.error ? <Text accessibilityRole="alert" style={styles.error}>{result.error}</Text> :
+      <ScrollView horizontal contentContainerStyle={styles.scroll} style={{ maxWidth: maxContainerWidth }}>
+        <SvgXml xml={result.xml} width={result.width} height={result.height} />
+      </ScrollView>}
+  </View>;
 }
-
 const styles = StyleSheet.create({
-  wrapper: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFF",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    maxWidth: "100%",
-  },
-  scrollContent: {
-    alignItems: "center",
-    justifyContent: "center",
-    flexGrow: 1,
-  },
-  barcodeRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    justifyContent: "center",
-  },
+  wrapper: { backgroundColor: "white", padding: 8, alignItems: "center", borderRadius: 8 },
+  scroll: { alignItems: "center", justifyContent: "center", flexGrow: 1 },
+  error: { color: "#BE123C", padding: 8 },
 });
