@@ -130,6 +130,16 @@ npm start      # device or emulator via Expo Go
 npm run web    # browser, via react-native-web
 ```
 
+`npm test` runs utility and service regression tests. Firestore security-rule tests
+run separately and require Java 21 or later on `PATH`:
+
+```bash
+npm run test:rules
+```
+
+This command starts a local Firestore emulator with a demo project, checks coupon
+ownership rules, and shuts the emulator down afterwards.
+
 ## Roadmap
 
 - [x] **Real-time Firestore sync**: Real-time snapshot listener for multi-device instant synchronisation.

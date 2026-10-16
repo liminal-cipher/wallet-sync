@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "test:rules": "npx --yes --package=firebase-tools@15.34.0 -- firebase emulators:exec --only firestore --project demo-wallet-sync-rules --config firebase.emulator.json \"jest --runInBand tests/firestore.rules.test.js\""
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@babel/core": "7.28.5",
     "@babel/plugin-transform-modules-commonjs": "7.27.1",
+    "@firebase/rules-unit-testing": "5.0.1",
     "babel-jest": "30.5.0",
     "jest": "^30.5.0"
   }
