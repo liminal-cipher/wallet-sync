@@ -48,6 +48,17 @@ describe("voucherParser", () => {
       expect(extractExpiryDate("날짜 정보 없음")).toBeNull();
       expect(extractExpiryDate(null)).toBeNull();
     });
+
+    test.each([
+      "2027-02-31", "2027-02-29", "2027-13-01", "2027-00-10",
+      "2027-04-31", "2027-01-00", "2027년 2월 31일", "27.02.31",
+    ])("rejects the invalid calendar date %s instead of rolling it over", (text) => {
+      expect(extractExpiryDate(text)).toBeNull();
+    });
+
+    test("accepts leap day in a leap year and keeps the end-of-day expiry", () => {
+      expect(extractExpiryDate("2028-02-29")).toEqual(new Date(2028, 1, 29, 23, 59, 59, 999));
+    });
   });
 
   describe("extractBarcodeNumber", () => {
@@ -68,6 +79,23 @@ describe("voucherParser", () => {
 
     test("returns null when no barcode digits found", () => {
       expect(extractBarcodeNumber("스타벅스 쿠폰입니다")).toBeNull();
+    });
+
+    test.each(["\n", "\r\n"])("does not append a date on the next line (%j)", (newline) => {
+      expect(extractBarcodeNumber(`PIN: 123456789012${newline}2027-12-31`)).toBe("123456789012");
+    });
+
+    test("does not join separate unlabelled numeric lines into a barcode", () => {
+      expect(extractBarcodeNumber("1234\n5678\n9012")).toBeNull();
+    });
+
+    test("accepts a labelled PIN with horizontal spacing", () => {
+      expect(extractBarcodeNumber("PIN 번호: 1234\t5678 9012")).toBe("123456789012");
+    });
+
+    test("does not truncate an overlong labelled PIN", () => {
+      expect(extractBarcodeNumber("PIN: 123456789012345678901234567890123")).toBeNull();
+      expect(extractBarcodeNumber("PIN: 1234-5678-9012-3456-7890-1234-5678")).toBeNull();
     });
   });
 

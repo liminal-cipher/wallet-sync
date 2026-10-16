@@ -62,16 +62,17 @@ const KNOWN_BRANDS = [
   "도서문화상품권",
 ];
 
+function createExpiryDate(year, month, day) {
+  const date = new Date(year, month, day, 23, 59, 59, 999);
+  return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day
+    ? date
+    : null;
+}
+
 /**
- * Extracts a valid expiry Date object from arbitrary text.
- * Handles formats like:
- * - 2026.12.31 / 2026. 12. 31
- * - 2026-12-31
- * - 2026/12/31
- * - 2026년 12월 31일
- * - 26.12.31 / 26-12-31
- * 
- * @param {string} text 
+ * Extracts a valid expiry Date from YYYY.MM.DD, YYYY-MM-DD, YYYY/MM/DD,
+ * Korean year/month/day text or a two-digit year (assumed to be in the 2000s).
+ * @param {string} text
  * @returns {Date|null}
  */
 function extractExpiryDate(text) {
@@ -84,8 +85,7 @@ function extractExpiryDate(text) {
     const year = parseInt(koreanMatch[1], 10);
     const month = parseInt(koreanMatch[2], 10) - 1;
     const day = parseInt(koreanMatch[3], 10);
-    const d = new Date(year, month, day, 23, 59, 59, 999);
-    if (!isNaN(d.getTime())) return d;
+    return createExpiryDate(year, month, day);
   }
 
   // 2. YYYY.MM.DD, YYYY-MM-DD, YYYY/MM/DD
@@ -95,8 +95,7 @@ function extractExpiryDate(text) {
     const year = parseInt(fullMatch[1], 10);
     const month = parseInt(fullMatch[2], 10) - 1;
     const day = parseInt(fullMatch[3], 10);
-    const d = new Date(year, month, day, 23, 59, 59, 999);
-    if (!isNaN(d.getTime())) return d;
+    return createExpiryDate(year, month, day);
   }
 
   // 3. YY.MM.DD, YY-MM-DD, YY/MM/DD (assuming 2000s)
@@ -106,8 +105,7 @@ function extractExpiryDate(text) {
     const year = 2000 + parseInt(shortMatch[1], 10);
     const month = parseInt(shortMatch[2], 10) - 1;
     const day = parseInt(shortMatch[3], 10);
-    const d = new Date(year, month, day, 23, 59, 59, 999);
-    if (!isNaN(d.getTime())) return d;
+    return createExpiryDate(year, month, day);
   }
 
   return null;
@@ -125,17 +123,15 @@ function extractBarcodeNumber(text) {
   if (!text || typeof text !== "string") return null;
 
   // 1. Explicit keyword match
-  const labeledRegex = /(?:바코드(?:\s*번호)?|쿠폰\s*번호|인증\s*번호|PIN|pin|PIN\s*번호)[\s:：]+([0-9\s\-]{8,30})/i;
+  const labeledRegex = /(?:바코드(?:[ \t]*번호)?|쿠폰[ \t]*번호|인증[ \t]*번호|PIN(?:[ \t]*번호)?)[ \t:：]+([0-9][0-9 \t-]*)(?!\d)/i;
   const labeledMatch = text.match(labeledRegex);
   if (labeledMatch) {
-    const cleaned = labeledMatch[1].replace(/[\s\-]/g, "");
-    if (/^\d{8,24}$/.test(cleaned)) {
-      return cleaned;
-    }
+    const cleaned = labeledMatch[1].replace(/[ \t-]/g, "");
+    return /^\d{8,24}$/.test(cleaned) ? cleaned : null;
   }
 
   // 2. Standalone formatted numeric chunks like 1234-5678-9012 or 9912 3456 7890
-  const formattedPattern = /\b\d{3,6}[\s\-]\d{3,6}[\s\-]\d{3,6}(?:[\s\-]\d{3,6})?\b/g;
+  const formattedPattern = /\b\d{3,6}[ \t-]\d{3,6}[ \t-]\d{3,6}(?:[ \t-]\d{3,6})?\b/g;
   const formattedMatches = text.match(formattedPattern);
   if (formattedMatches && formattedMatches.length > 0) {
     for (const m of formattedMatches) {
