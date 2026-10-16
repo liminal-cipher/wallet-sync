@@ -4,7 +4,8 @@ import { Platform } from "react-native";
 // Configure foreground notification presentation
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -16,15 +17,6 @@ export const requestNotificationPermissions = async () => {
   }
 
   try {
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
     if (Platform.OS === "android") {
       await Notifications.setNotificationChannelAsync("coupon-expiry", {
         name: "쿠폰 만료 알림",
@@ -34,6 +26,15 @@ export const requestNotificationPermissions = async () => {
       });
     }
 
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
     return finalStatus === "granted";
   } catch (error) {
     console.error("Error requesting notification permissions:", error);
@@ -41,48 +42,29 @@ export const requestNotificationPermissions = async () => {
   }
 };
 
-export const cancelCouponNotifications = async (couponId) => {
-  if (Platform.OS === "web" || !couponId) {
-    return;
-  }
+const NOTIFICATION_TYPE = "coupon-expiry";
+let pendingOperations = Promise.resolve();
 
-  try {
-    const scheduledNotifications =
-      await Notifications.getAllScheduledNotificationsAsync();
-
-    for (const notif of scheduledNotifications) {
-      if (notif.content?.data?.couponId === couponId) {
-        await Notifications.cancelScheduledNotificationAsync(
-          notif.identifier
-        );
-      }
-    }
-  } catch (error) {
-    console.error("Error cancelling coupon notifications:", error);
-  }
+// Serialise snapshots and account changes so stale work cannot finish after cleanup.
+const enqueue = (operation) => {
+  const result = pendingOperations.then(operation);
+  pendingOperations = result.catch(() => {});
+  return result;
 };
 
-export const scheduleCouponExpiryNotification = async (coupon) => {
-  if (Platform.OS === "web" || !coupon || !coupon.expiryDate || coupon.isUsed) {
-    return;
+const isCouponNotification = (notification) => {
+  const data = notification.content?.data;
+  return data?.type === NOTIFICATION_TYPE || typeof data?.couponId === "string";
+};
+
+const createExpiryRequests = (userId, coupon, now) => {
+  if (!coupon.id || coupon.userId !== userId || coupon.isUsed || !coupon.expiryDate) {
+    return [];
   }
-
-  const rawExpiry = coupon.expiryDate;
-  const expDate =
-    typeof rawExpiry.toDate === "function"
-      ? rawExpiry.toDate()
-      : new Date(rawExpiry);
-
-  if (isNaN(expDate.getTime())) {
-    return;
-  }
-
-  // Cancel any existing notifications for this coupon first
-  if (coupon.id) {
-    await cancelCouponNotifications(coupon.id);
-  }
-
-  const now = new Date();
+  const expDate = typeof coupon.expiryDate.toDate === "function"
+    ? coupon.expiryDate.toDate()
+    : new Date(coupon.expiryDate);
+  if (isNaN(expDate.getTime())) return [];
 
   // Define notification trigger targets (at 09:00 AM)
   const targets = [
@@ -91,26 +73,72 @@ export const scheduleCouponExpiryNotification = async (coupon) => {
     { daysBefore: 0, title: "쿠폰 만료 D-Day", body: `'${coupon.brand}' 쿠폰이 오늘 자정에 만료됩니다.` },
   ];
 
-  for (const target of targets) {
+  return targets.flatMap((target) => {
     const triggerDate = new Date(expDate);
     triggerDate.setDate(triggerDate.getDate() - target.daysBefore);
     triggerDate.setHours(9, 0, 0, 0);
 
-    // Only schedule if trigger date is in the future
-    if (triggerDate.getTime() > now.getTime()) {
-      try {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: target.title,
-            body: target.body,
-            data: { couponId: coupon.id || coupon.barcodeNumber },
-            channelId: "coupon-expiry",
-          },
-          trigger: triggerDate,
-        });
-      } catch (err) {
-        console.error("Error scheduling notification for target:", target, err);
+    if (triggerDate.getTime() <= now.getTime()) return [];
+    return [{
+      identifier: `${NOTIFICATION_TYPE}:${userId}:${coupon.id}:${target.daysBefore}`,
+      content: {
+        title: target.title,
+        body: target.body,
+        data: {
+          type: NOTIFICATION_TYPE,
+          userId,
+          couponId: coupon.id,
+          scheduleKey: JSON.stringify([coupon.brand, triggerDate.getTime()]),
+        },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: triggerDate,
+        channelId: NOTIFICATION_TYPE,
+      },
+    }];
+  });
+};
+
+// Keep this account's reminders during startup, even before an offline snapshot arrives.
+// With no account to keep, remove every coupon reminder on sign-out.
+export const clearCouponNotifications = (userIdToKeep = null) => {
+  if (Platform.OS === "web") return Promise.resolve();
+  return enqueue(async () => {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notification of scheduled) {
+      if (isCouponNotification(notification) &&
+          (!userIdToKeep || notification.content.data.userId !== userIdToKeep)) {
+        await Notifications.cancelScheduledNotificationAsync(notification.identifier);
       }
     }
-  }
+  });
+};
+
+export const reconcileCouponNotifications = (userId, coupons) => {
+  if (Platform.OS === "web" || !userId) return Promise.resolve();
+  return enqueue(async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    const now = new Date();
+    const requests = status === "granted"
+      ? coupons.flatMap((coupon) => createExpiryRequests(userId, coupon, now))
+      : [];
+    const desired = new Map(requests.map((request) => [request.identifier, request]));
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+
+    for (const notification of scheduled) {
+      if (!isCouponNotification(notification)) continue;
+      const request = desired.get(notification.identifier);
+      const data = notification.content.data;
+      if (request && data.userId === userId &&
+          data.scheduleKey === request.content.data.scheduleKey) {
+        desired.delete(notification.identifier);
+      } else {
+        await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+      }
+    }
+    for (const request of desired.values()) {
+      await Notifications.scheduleNotificationAsync(request);
+    }
+  });
 };

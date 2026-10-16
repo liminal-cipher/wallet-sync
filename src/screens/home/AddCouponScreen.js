@@ -15,7 +15,6 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { addCoupon } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
-import { scheduleCouponExpiryNotification } from "../../services/notificationService";
 import { parseVoucherText } from "../../utils/voucherParser";
 
 export default function AddCouponScreen({ navigation }) {
@@ -243,8 +242,7 @@ export default function AddCouponScreen({ navigation }) {
     };
 
     try {
-      const docRef = await addCoupon(couponData);
-      scheduleCouponExpiryNotification({ id: docRef.id, ...couponData });
+      await addCoupon(couponData);
       navigation.goBack();
     } catch (error) {
       Alert.alert("등록 실패", error.message || "쿠폰 저장 중 오류가 발생했습니다.");

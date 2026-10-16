@@ -21,10 +21,6 @@ import {
 } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
 import BarcodeRenderer from "../../components/BarcodeRenderer";
-import {
-  scheduleCouponExpiryNotification,
-  cancelCouponNotifications,
-} from "../../services/notificationService";
 import { getExpiryInfo } from "../../utils/dateUtils";
 
 export default function HomeScreen() {
@@ -93,13 +89,6 @@ export default function HomeScreen() {
     try {
       const nextStatus = !coupon.isUsed;
       await updateCoupon(coupon.id, { isUsed: nextStatus });
-      if (nextStatus) {
-        // Marked used -> cancel scheduled alerts
-        await cancelCouponNotifications(coupon.id);
-      } else {
-        // Reactivated -> reschedule alerts
-        await scheduleCouponExpiryNotification({ ...coupon, isUsed: false });
-      }
     } catch (error) {
       Alert.alert("오류", "상태 변경 중 오류가 발생했습니다.");
     }
@@ -117,7 +106,6 @@ export default function HomeScreen() {
           onPress: async () => {
             try {
               await deleteCoupon(coupon.id);
-              await cancelCouponNotifications(coupon.id);
             } catch (error) {
               Alert.alert("오류", "쿠폰 삭제 중 오류가 발생했습니다.");
             }
