@@ -10,6 +10,7 @@ import LoginScreen from "./src/screens/auth/LoginScreen";
 import RegisterScreen from "./src/screens/auth/RegisterScreen";
 import HomeScreen from "./src/screens/home/HomeScreen";
 import AddCouponScreen from "./src/screens/home/AddCouponScreen";
+import ResetPasswordScreen from "./src/screens/auth/ResetPasswordScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -40,7 +41,7 @@ export default function App() {
   return (
     <NavigationContainer>
       {user ? (
-        <Stack.Navigator>
+        <Stack.Navigator key={user.uid}>
           <Stack.Screen
             name="Home"
             component={HomeScreen}
@@ -64,6 +65,7 @@ export default function App() {
             component={RegisterScreen}
             options={{ headerShown: false }}
           />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       )}
     </NavigationContainer>

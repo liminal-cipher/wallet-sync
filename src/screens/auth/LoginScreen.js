@@ -5,10 +5,10 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   StatusBar,
 } from "react-native";
 import { loginUser, getAuthErrorMessage } from "../../services/authService";
+import { Alert } from "../../utils/feedback";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -81,6 +81,9 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity style={styles.linkContainer} onPress={() => navigation.navigate("ResetPassword")}>
+          <Text style={styles.linkHighlight}>비밀번호를 잊으셨나요?</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.linkContainer}
           onPress={() => navigation.navigate("Register")}
