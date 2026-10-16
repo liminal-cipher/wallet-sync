@@ -28,6 +28,9 @@
   },
   "private": true,
   "devDependencies": {
+    "@babel/core": "7.28.5",
+    "@babel/plugin-transform-modules-commonjs": "7.27.1",
+    "babel-jest": "30.5.0",
     "jest": "^30.5.0"
   }
 }
