@@ -97,7 +97,7 @@ wallet-sync/
 
 Utility, service and component regression tests run with Jest. Local Firestore and Storage emulator tests exercise ownership, simultaneous saves, revision conflicts, reversible changes and immutable originals. Automated exports check web, iOS and Android JavaScript bundling. These checks do not establish physical-device OCR accuracy, barcode-reader compatibility or notification delivery.
 
-The latest local emulator run passed 205 tests across 25 suites, with no skipped
+The latest local emulator run passed 224 tests across 27 suites, with no skipped
 tests. Browser checks used synthetic vouchers and local authentication/data services.
 
 - **Data isolation is defined in `firestore.rules`.** Queries filter by `userId`, and the repository contains version-controlled Firestore security rules enforcing document ownership boundaries.
@@ -105,7 +105,7 @@ tests. Browser checks used synthetic vouchers and local authentication/data serv
 - **Smart voucher text parsing.** Parses pasted KakaoTalk gifticon, Giftishow, SMS, or OCR-produced text to fill brand, PIN, and expiry date.
 - **Expiry reminders run locally.** The default is 09:00 on D-7, D-3 and D-Day. Preferences are per device; web notifications are unsupported. iOS queues the nearest reminders within an app budget of 60 and replenishes them on foreground or data changes.
 - **Originals have a local fallback.** Failed cloud uploads retain the image on the registering device and are labelled accordingly. JSON with originals is the portable recovery path.
-- **Recovery has explicit boundaries.** File backups contain current coupon records, including trash, rather than historical versions, drafts or reminder preferences. See [Recovery and Data Handling](docs/recovery.md).
+- **Recovery has explicit boundaries.** JSON v3 backups contain current coupons, trash and optional brand favourites/recent choices. They do not contain historical versions, drafts or reminder preferences. Settings restore only by explicit choice, with a pre-restore copy retained. JSON v1/v2 and CSV imports remain supported. See [Recovery and Data Handling](docs/recovery.md).
 - **Catalogue coverage is deliberately limited.** The 17 entries have 57 selected products, with custom entry for missing products. Fourteen official-site identity images are bundled; Olive Young and Coffee Bean use text tiles. There is no live price feed or issuer balance synchronisation. See [Brand Selection, Search and Favourites](docs/brand-catalogue.md).
 - **Browser and device verification have different boundaries.** Local-emulator browser checks cover registration, wallet search, favourites, recent choices and manual balance edits. The browser confirmation dialogue prevented automated history restoration; emulator tests cover that transaction. Physical-device OCR accuracy, checkout scans and native file sharing remain unmeasured.
 - **Dependency maintenance retains explicit limits.** Expo SDK 54 and Jest compatibility checks pass after maintenance updates. The audit reports zero Critical entries, with 54 affected package entries originating in six remaining advisories. Expo Doctor still flags the OCR library as untested on the New Architecture. See [Dependency Maintenance](docs/dependency-maintenance.md) for the update scope, remaining advisory paths and verification commands.
@@ -182,7 +182,7 @@ browser OCR downloads its worker and Korean/English models on first use.
 
 ## Status
 
-In progress. Personal project. Brand selection, search, favourites and recovery features are implemented; production rule changes and physical-device acceptance checks remain pending. Last updated 2026-10-17.
+In progress. Personal project. Brand selection, portable favourites and recovery features are implemented; production rule changes and physical-device acceptance checks remain pending. Last updated 2026-10-18.
 
 ## Licence
 

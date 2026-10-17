@@ -6,7 +6,7 @@ jest.mock("expo-print", () => ({ printToFileAsync: jest.fn() }));
 jest.mock("../src/services/firebase", () => ({ auth: { currentUser: { uid: "owner" } } }));
 jest.mock("../src/services/firestoreService", () => ({ addCoupon: jest.fn(), fetchCoupons: jest.fn() }));
 jest.mock("../src/services/imageService", () => ({ imageDataUri: jest.fn(), importImage: jest.fn(), uploadOriginal: jest.fn() }));
-jest.mock("../src/services/localRecovery", () => ({ captureSnapshot: jest.fn(), writeLocal: jest.fn(), serialise: (value) => JSON.parse(JSON.stringify(value)) }));
+jest.mock("../src/services/localRecovery", () => ({ captureSnapshot: jest.fn(), readLocal: jest.fn(), writeLocal: jest.fn(), serialise: (value) => JSON.parse(JSON.stringify(value)) }));
 const { restoreRecords, exportWallet } = require("../src/services/backupService");
 const { catalogue } = require("./catalogueFixtures");
 const { validateBackupRecords, parseBackup } = require("../src/utils/backupData");
@@ -18,6 +18,7 @@ const record = (barcodeNumber) => ({ brand: "Coffee", kind: "voucher", barcodeTy
 beforeEach(() => {
   jest.clearAllMocks(); firestore.fetchCoupons.mockResolvedValue([]); firestore.addCoupon.mockReset().mockResolvedValue({ id: "new" });
   local.captureSnapshot.mockResolvedValue(); local.writeLocal.mockResolvedValue();
+  local.readLocal.mockResolvedValue(null);
 });
 test("storage failure before checkpoint prevents any restore writes", async () => {
   local.writeLocal.mockRejectedValueOnce(new Error("Storage full"));
@@ -79,7 +80,7 @@ describe("portable export contract", () => {
     images.imageDataUri.mockResolvedValue("data:image/png;base64,YQ==");
     await exportWallet(format, true);
     const output = await blob.text();
-    if (format === "json") expect(JSON.parse(output).version).toBe(2);
+    if (format === "json") expect(JSON.parse(output).version).toBe(3);
     const restored = parseBackup(output, format)[0];
     expect(restored).toMatchObject({ barcodeNumber: "00-12 34", catalogue: validateBackupRecords([input])[0].catalogue, image: null,
       original: format === "json" ? "data:image/png;base64,YQ==" : null });

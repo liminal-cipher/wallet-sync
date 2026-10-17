@@ -28,9 +28,11 @@ managed disaster-recovery service or a substitute for externally stored backups.
 
 ## Backup Formats
 
-New JSON and CSV exports use version 2 and preserve optional catalogue snapshots,
-issuer/channel details and amount records. Existing version 1 JSON and the legacy
-ten-column CSV header remain importable. Unknown future formats fail visibly.
+New JSON exports use version 3 and can also include brand favourites and recent
+choices. CSV retains its version 2 column contract. Both preserve optional
+catalogue snapshots, issuer/channel details and amount records. Existing version
+1 and 2 JSON and the legacy ten-column CSV header remain importable. Unknown
+future formats fail visibly. Earlier clients cannot import version 3 JSON.
 Use the updated client for complete exports and historical restoration of
 metadata-bearing coupons; older clients omit these fields from their backups.
 See [Catalogue Metadata and Backup Compatibility](catalogue-data.md) for the
@@ -48,7 +50,10 @@ schema, CSV column contract and mixed-client boundaries.
   the print dialogue; choose the browser's PDF destination.
 
 Portable backups contain current records, not historical versions, unsaved drafts,
-login credentials, brand favourites/recent choices or reminder preferences.
+login credentials or reminder preferences. JSON includes the current account's
+device favourites/recent choices by default, including when exporting an older
+coupon snapshot. Disable **JSON에 브랜드 설정 포함** to export coupons independently
+if settings are unreadable. CSV and PDF do not contain preferences.
 Exported files contain redeemable
 barcode data and are not encrypted by this application. Store them privately.
 Changing accounts does not expose another account's device copies through the UI.
@@ -59,6 +64,22 @@ currently signed-in account and ignores any original account or document ID.
 Duplicate barcode payload/symbology pairs and exact duplicate external events are
 skipped, including duplicates within the file. Existing records are never replaced.
 Trashed records stay in trash; restore them separately to make them active.
+
+Brand settings require the explicit **브랜드 설정 함께 복원** option in the preview
+and the in-app confirmation. Existing favourites are retained; imported IDs,
+including retired brands, are appended without duplicates. More than 100 combined
+favourites fails before coupon writes. Current recent choices take precedence,
+with at most twelve entries retained. Settings-only JSON backups can be restored.
+**브랜드 설정 복원 전으로 되돌리기** restores the saved pre-merge settings; the
+displaced settings become the next undo copy. A failed safety-copy write prevents
+the settings change.
+
+Interrupted restores retain both coupons and preferences in their checkpoint.
+If settings or final checkpoint storage fails after coupons were added, retrying
+the same input skips existing coupons and merges settings idempotently. Replacing
+an interrupted input retains its predecessor under **직전 복원 입력 다시 열기**.
+Unknown checkpoint versions are preserved and rejected rather than overwritten.
+Account changes invalidate a prepared restore; select the backup again.
 
 Limits are 2,000 records, 50 MiB per input file, 10 MiB per original and 35 MiB of
 embedded originals per JSON backup. Oversized exports fail explicitly. Use smaller

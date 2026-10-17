@@ -4,7 +4,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Page, Button, ui } from "../../components/WalletUi";
 import { fetchCouponHistory, getCoupon, restoreCouponVersion } from "../../services/firestoreService";
 import { toDay, toDate } from "../../utils/dateUtils";
-import { confirmAction } from "../../utils/feedback";
+import ConfirmationDialog, { useConfirmation } from "../../components/ConfirmationDialog";
 import CatalogueDetails from "../../components/CatalogueDetails";
 
 export default function CouponHistoryScreen({ navigation, route }) {
@@ -13,6 +13,7 @@ export default function CouponHistoryScreen({ navigation, route }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const confirmation = useConfirmation();
   const load = useCallback(async () => {
     const [record, history] = await Promise.all([getCoupon(route.params.id), fetchCouponHistory(route.params.id)]);
     setCurrent(record); setVersions(history);
@@ -20,13 +21,14 @@ export default function CouponHistoryScreen({ navigation, route }) {
   useFocusEffect(useCallback(() => { load().catch((e) => setError(e.message)); }, [load]));
   const restore = async (version) => {
     if (pending.current || !current) return;
-    if (!(await confirmAction("이 버전으로 복원", "현재 상태도 새 이력으로 남깁니다. 브랜드·바코드·만료일·사용 상태·첨부·휴지통 상태가 선택한 버전으로 돌아갑니다."))) return;
+    if (!(await confirmation.confirm("이 버전으로 복원", "현재 상태도 새 이력으로 남깁니다. 브랜드·바코드·만료일·사용 상태·첨부·휴지통 상태가 선택한 버전으로 돌아갑니다."))) return;
     pending.current = true; setBusy(true); setError("");
     try { await restoreCouponVersion(current.id, version, current.revision || 0); await load(); }
     catch (e) { setError(e.message); }
     finally { pending.current = false; setBusy(false); }
   };
   return <Page title="쿠폰 수정 이력" navigation={navigation}>
+    <ConfirmationDialog {...confirmation.dialog} />
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     {!current && !error && <ActivityIndicator />}
     {current && <Text style={ui.heading}>{current.brand} · 현재 버전 {current.revision || 0}</Text>}

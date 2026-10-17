@@ -2,7 +2,7 @@ jest.mock("../src/services/firebase", () => ({ auth: { currentUser: { uid: "one"
 jest.mock("../src/services/localRecovery", () => ({ readLocal: jest.fn(), writeLocal: jest.fn() }));
 const { auth } = require("../src/services/firebase");
 const local = require("../src/services/localRecovery");
-const { loadBrandPreferences, toggleFavouriteBrand, rememberBrand } = require("../src/services/brandPreferences");
+const { loadBrandPreferences, toggleFavouriteBrand, rememberBrand, mergeBrandPreferences, restorePreviousBrandPreferences } = require("../src/services/brandPreferences");
 let values;
 beforeEach(() => {
   jest.clearAllMocks(); auth.currentUser = { uid: "one" }; values = new Map();
@@ -41,4 +41,28 @@ test("corrupt or future preferences and storage failures never replace the old c
   expect((await loadBrandPreferences("one")).favourites).toEqual([]);
   await toggleFavouriteBrand("one", "daiso");
   expect((await loadBrandPreferences("one")).favourites).toEqual(["daiso"]);
+});
+test("restored preferences merge behind current choices, retain retired IDs and can be undone", async () => {
+  await toggleFavouriteBrand("one", "mega"); await rememberBrand("one", "daiso");
+  const previous = await loadBrandPreferences("one");
+  await mergeBrandPreferences("one", { version: 1, favourites: ["mega", "retired-brand"], recent: ["paul-bassett", "daiso"] });
+  expect(await loadBrandPreferences("one")).toEqual({ version: 1, favourites: ["mega", "retired-brand"], recent: ["daiso", "paul-bassett"] });
+  const saved = values.get("one:brand-preferences:before-restore");
+  await mergeBrandPreferences("one", { version: 1, favourites: ["retired-brand"], recent: ["paul-bassett"] });
+  expect(values.get("one:brand-preferences:before-restore")).toEqual(saved);
+  await restorePreviousBrandPreferences("one"); expect(await loadBrandPreferences("one")).toEqual(previous);
+});
+test("a failed safety-copy write and an overflowing merge leave preferences untouched", async () => {
+  await toggleFavouriteBrand("one", "mega");
+  local.writeLocal.mockRejectedValueOnce(new Error("Disk full"));
+  await expect(mergeBrandPreferences("one", { version: 1, favourites: ["daiso"], recent: [] })).rejects.toThrow("Disk full");
+  expect((await loadBrandPreferences("one")).favourites).toEqual(["mega"]);
+  await expect(mergeBrandPreferences("one", { version: 1, favourites: Array.from({ length: 100 }, (_, i) => `brand-${i}`), recent: [] })).rejects.toThrow("100개");
+  expect((await loadBrandPreferences("one")).favourites).toEqual(["mega"]);
+});
+test("an account switch during the safety copy cannot apply imported settings", async () => {
+  local.writeLocal.mockImplementationOnce(async () => { auth.currentUser = { uid: "two" }; });
+  await expect(mergeBrandPreferences("one", { version: 1, favourites: ["daiso"], recent: [] })).rejects.toThrow("계정");
+  expect(values.get("one:brand-preferences")).toBeUndefined();
+  expect(values.get("two:brand-preferences")).toBeUndefined();
 });

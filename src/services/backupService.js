@@ -6,14 +6,17 @@ import * as Print from "expo-print";
 import { auth } from "./firebase";
 import { addCoupon, fetchCoupons } from "./firestoreService";
 import { imageDataUri, importImage, uploadOriginal } from "./imageService";
-import { serialise, captureSnapshot, writeLocal } from "./localRecovery";
+import { serialise, captureSnapshot, readLocal, writeLocal } from "./localRecovery";
+import { loadBrandPreferences, mergeBrandPreferences } from "./brandPreferences";
+import { mergePreferenceData } from "../utils/brandPreferenceData";
 import { normaliseCoupon } from "../utils/couponModel";
-import { BACKUP_VERSION, toCsv, parseBackup, planRestore, validateBackupRecords, escapeHtml } from "../utils/backupData";
+import { BACKUP_VERSION, toCsv, parseBackup, parseWalletBackup, planRestore, validateRestoreInput, validateRestoreSession, escapeHtml } from "../utils/backupData";
 import { barcodeSvg } from "../utils/barcodes";
 import { selectBackupRange } from "../utils/backupRange";
 import { catalogueDetailLines } from "../utils/catalogueDisplay";
 
 const assertAccount = (uid) => { if (!uid || auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다. 다시 시도해 주세요."); };
+const restoring = new Set();
 async function shareText(text, extension, mimeType) {
   const name = `wallet-sync-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
   if (Platform.OS === "web") {
@@ -29,13 +32,15 @@ async function shareText(text, extension, mimeType) {
   if (!(await Sharing.isAvailableAsync())) throw new Error(`파일은 앱 문서에 보관됐지만 공유를 지원하지 않습니다: ${name}`);
   await Sharing.shareAsync(uri, { mimeType, dialogTitle: "쿠폰 백업 저장" });
 }
-export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null) {
+export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null, includePreferences = true) {
   const uid = auth.currentUser?.uid;
   assertAccount(uid);
   const source = sourceRecords ?? await fetchCoupons(uid);
+  assertAccount(uid);
   // Validate before JSON serialisation can turn non-finite amounts into null.
   const records = serialise(source.map((record) => ({ ...record, ...normaliseCoupon(record) })));
   if (sourceRecords === null) await captureSnapshot(uid, records);
+  assertAccount(uid);
   const selected = selectBackupRange(records, range);
   if (selected.length > 2000) throw new Error("한 백업은 최대 2000개입니다. 시작·끝 번호를 조정해 나눠 내보내 주세요.");
   const portable = []; let originalBytes = 0;
@@ -53,7 +58,9 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
   assertAccount(uid);
   if (format === "csv") { const text = toCsv(portable); parseBackup(text, "csv"); return shareText(text, "csv", "text/csv"); }
   if (format === "json") {
-    const text = JSON.stringify({ app: "wallet-sync", version: BACKUP_VERSION, exportedAt: new Date().toISOString(), source: sourceRecords === null ? "server" : "local-snapshot", records: portable }, null, 2);
+    const brandPreferences = includePreferences ? await loadBrandPreferences(uid) : null;
+    assertAccount(uid);
+    const text = JSON.stringify({ app: "wallet-sync", version: BACKUP_VERSION, exportedAt: new Date().toISOString(), source: sourceRecords === null ? "server" : "local-snapshot", records: portable, brandPreferences }, null, 2);
     // Validate our own size/format before offering an unusable backup.
     parseBackup(text, "json");
     return shareText(text, "json", "application/json");
@@ -90,43 +97,78 @@ export async function pickBackup() {
   const asset = result.assets[0];
   if (asset.size > 50 * 1024 * 1024) throw new Error("50MB 이하 백업을 선택해 주세요.");
   const text = Platform.OS === "web" ? await (await fetch(asset.uri)).text() : await FileSystem.readAsStringAsync(asset.uri);
-  return parseBackup(text, asset.name.toLowerCase().endsWith(".csv") ? "csv" : "json");
+  return parseWalletBackup(text, asset.name.toLowerCase().endsWith(".csv") ? "csv" : "json");
 }
-export async function previewRestore(records) {
-  return planRestore(records, await fetchCoupons(auth.currentUser?.uid));
-}
-export async function restoreRecords(records, onProgress = () => {}) {
+export async function previewRestore(input) {
   const uid = auth.currentUser?.uid;
   assertAccount(uid);
-  // Validate the entire input again before checkpointing or making server writes.
-  records = validateBackupRecords(records, { localImages: true });
+  const backup = validateRestoreInput(input, { localImages: true });
   const current = await fetchCoupons(uid);
-  await captureSnapshot(uid, current);
-  // Persist the input and progress before any network mutation. A retry is additive.
-  const session = { startedAt: new Date().toISOString(), records, completed: 0 };
-  await writeLocal(uid, "restore", session);
-  const plan = planRestore(records, current);
-  let added = 0, skipped = plan.skipped, localOnly = 0;
-  for (const record of plan.additions) {
-    assertAccount(uid);
-    try {
-      let image = record.image?.ownerId === uid ? record.image : null;
-      if (record.original) {
-        const uploaded = await uploadOriginal(await importImage(record.original));
-        image = uploaded.image;
-        if (uploaded.localOnly) localOnly++;
-      }
+  assertAccount(uid);
+  return { ...planRestore(backup.records, current), ...backup, uid };
+}
+export const restoreRecords = (records, onProgress = () => {}) => restoreWalletBackup(records, { onProgress });
+export async function restoreWalletBackup(input, { onProgress = () => {}, includePreferences = false, expectedUid = auth.currentUser?.uid } = {}) {
+  const uid = expectedUid;
+  assertAccount(uid);
+  const backup = validateRestoreInput(input, { localImages: true });
+  if (restoring.has(uid)) throw new Error("이미 복원 중입니다. 현재 작업이 끝난 뒤 다시 시도해 주세요.");
+  restoring.add(uid);
+  try {
+    if (includePreferences && backup.brandPreferences) {
+      mergePreferenceData(await loadBrandPreferences(uid), backup.brandPreferences);
       assertAccount(uid);
-      await addCoupon({ ...record, image }, { restore: true });
-      added++;
-      session.completed = added;
-      await writeLocal(uid, "restore", session);
-      onProgress(added, plan.additions.length);
-    } catch (error) {
-      if (error.code === "coupon/duplicate") { skipped++; continue; }
-      throw new Error(`${added}개 복원 후 중단됐습니다. 이미 복원한 쿠폰은 유지되며 같은 백업으로 재시도할 수 있습니다. ${error.message}`);
     }
-  }
-  await writeLocal(uid, "restore", null);
-  return { added, skipped, localOnly };
+    const current = await fetchCoupons(uid);
+    assertAccount(uid);
+    await captureSnapshot(uid, current);
+    assertAccount(uid);
+    const previous = await readLocal(uid, "restore");
+    assertAccount(uid);
+    if (previous) {
+      validateRestoreSession(previous);
+      await writeLocal(uid, "restore:previous", previous);
+      assertAccount(uid);
+    }
+    // Persist the input and progress before any network mutation. A retry is additive.
+    const session = { version: 2, startedAt: new Date().toISOString(), ...backup, includePreferences, completed: 0 };
+    await writeLocal(uid, "restore", session);
+    assertAccount(uid);
+    const plan = planRestore(backup.records, current);
+    let added = 0, skipped = plan.skipped, localOnly = 0;
+    for (const record of plan.additions) {
+      assertAccount(uid);
+      try {
+        let image = record.image?.ownerId === uid ? record.image : null;
+        if (record.original) {
+          const retained = await importImage(record.original);
+          assertAccount(uid);
+          const uploaded = await uploadOriginal(retained);
+          assertAccount(uid);
+          image = uploaded.image;
+          if (uploaded.localOnly) localOnly++;
+        }
+        assertAccount(uid);
+        await addCoupon({ ...record, image }, { restore: true });
+        added++;
+        assertAccount(uid);
+        session.completed = added;
+        await writeLocal(uid, "restore", session);
+        assertAccount(uid);
+        onProgress(added, plan.additions.length);
+      } catch (error) {
+        if (error.code === "coupon/duplicate") { skipped++; continue; }
+        throw new Error(`${added}개 복원 후 중단됐습니다. 이미 복원한 쿠폰은 유지되며 같은 백업으로 재시도할 수 있습니다. ${error.message}`);
+      }
+    }
+    let preferencesRestored = false;
+    if (includePreferences && backup.brandPreferences) {
+      await mergeBrandPreferences(uid, backup.brandPreferences);
+      assertAccount(uid);
+      preferencesRestored = true;
+    }
+    await writeLocal(uid, "restore", null);
+    assertAccount(uid);
+    return { added, skipped, localOnly, preferencesRestored };
+  } finally { restoring.delete(uid); }
 }

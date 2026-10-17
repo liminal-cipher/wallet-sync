@@ -60,7 +60,8 @@ qualifying conditions continue to use the coupon's `conditions` text.
 | Format | Read | Write | Catalogue handling |
 | --- | --- | --- | --- |
 | JSON v1 | Supported | No | Older files import with `catalogue: null`; no catalogue match is inferred |
-| JSON v2 | Supported | Default | Preserves the validated metadata object, including unknown amounts |
+| JSON v2 | Supported | No | Preserves the validated metadata object, including unknown amounts |
+| JSON v3 | Supported | Default | Retains coupon metadata and optional device brand preferences; preference restoration requires consent |
 | Legacy CSV | Supported | No | Exact original ten-column header remains accepted |
 | CSV v2 | Supported | Default | Original columns followed by a `catalogue` column containing a JSON object or JSON `null` |
 | Future JSON, CSV headers or metadata schemas | Rejected | No | A newer reader is required; fields are never silently stripped |
@@ -125,7 +126,7 @@ records. Import compatibility is backwards only; it cannot upgrade older client
 binaries. No forced client-version gate or backend deployment is part of this
 change. No bulk migration of existing server records is needed.
 
-Automated tests cover v1 imports, v2 JSON/CSV round trips, malformed/future
+Automated tests cover v1/v2 imports, v3 JSON and v2 CSV round trips, malformed/future
 metadata, exact barcode preservation, original images, device snapshots,
 interrupted restores, ordinary editor drafts, Firestore history and stale edits.
 No real coupon, live price or production record is needed for these tests.

@@ -1,8 +1,9 @@
 import { normaliseCoupon, couponIdentity, validateImage } from "./couponModel";
 import { normaliseCatalogueMetadata } from "./catalogueModel";
 import { toDate } from "./dateUtils";
+import { validateBrandPreferences } from "./brandPreferenceData";
 
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 export const LEGACY_CSV_FIELDS = ["kind", "brand", "barcodeType", "barcodeNumber", "expiryDay", "isUsed", "provider", "conditions", "sourceUrl", "deletedAt"];
 export const CSV_FIELDS = [...LEGACY_CSV_FIELDS, "catalogue"];
 const dangerousCell = /^[\s]*[=+\-@\t\r]/;
@@ -73,12 +74,31 @@ export function validateBackupRecords(records, { localImages = false } = {}) {
   });
 }
 export function parseBackup(text, format) {
+  return parseWalletBackup(text, format).records;
+}
+export function validateRestoreInput(input, { localImages = false } = {}) {
+  if (Array.isArray(input)) input = { records: input, brandPreferences: null };
+  if (!input || typeof input !== "object" || !Array.isArray(input.records)) throw new Error("복원할 백업을 읽지 못했습니다.");
+  return { records: validateBackupRecords(input.records, { localImages }), brandPreferences: input.brandPreferences == null ? null : validateBrandPreferences(input.brandPreferences) };
+}
+export function validateRestoreSession(session) {
+  if (!session || ![undefined, 2].includes(session.version) || !Number.isInteger(session.completed) || session.completed < 0 ||
+      !Array.isArray(session.records) || session.completed > session.records.length ||
+      (session.includePreferences !== undefined && typeof session.includePreferences !== "boolean")) {
+    throw new Error("중단된 복원 정보를 읽지 못했습니다. 기존 사본은 유지됩니다.");
+  }
+  return { ...validateRestoreInput(session, { localImages: true }), includePreferences: session.includePreferences === true };
+}
+export function parseWalletBackup(text, format) {
+  if (typeof text !== "string") throw new Error("백업 내용을 읽지 못했습니다.");
   if (text.length > 50 * 1024 * 1024) throw new Error("50MB 이하 백업을 선택해 주세요.");
-  if (format === "csv") return validateBackupRecords(parseCsv(text));
+  if (format === "csv") return validateRestoreInput(parseCsv(text));
   let backup;
   try { backup = JSON.parse(text.replace(/^\ufeff/, "")); } catch { throw new Error("JSON 백업을 읽을 수 없습니다."); }
-  if (backup?.app !== "wallet-sync" || ![1, BACKUP_VERSION].includes(backup.version)) throw new Error("지원하는 WalletSync 백업 버전이 아닙니다.");
-  return validateBackupRecords(backup.records);
+  if (backup?.app !== "wallet-sync" || ![1, 2, BACKUP_VERSION].includes(backup.version)) throw new Error("지원하는 WalletSync 백업 버전이 아닙니다.");
+  if (backup.version === 3 && !Object.prototype.hasOwnProperty.call(backup, "brandPreferences")) throw new Error("브랜드 설정 정보가 없는 v3 백업입니다.");
+  if (backup.version < 3 && backup.brandPreferences != null) throw new Error("브랜드 설정이 포함된 백업의 버전이 올바르지 않습니다.");
+  return validateRestoreInput(backup);
 }
 export function planRestore(records, existing) {
   const identities = new Set(existing.map(couponIdentity));

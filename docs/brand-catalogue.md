@@ -47,8 +47,10 @@ from saving the coupon and must not trigger a duplicate submission.
 
 Preferences use the existing durable device store and are scoped to the signed-in
 account. Account changes remount the navigation tree and picker. Preferences
-survive reopening on that device but are not cloud-synchronised or included in
-portable coupon backups. Removing device storage also removes these preferences.
+survive reopening on that device and can be included in JSON v3 portable backups.
+They are not cloud-synchronised. Removing device storage requires an externally
+saved JSON backup to recover them. Importing preferences is an explicit,
+additive choice; see [Recovery and Data Handling](recovery.md).
 
 ## Sources and Maintenance
 
@@ -77,8 +79,8 @@ endorsement, payment integration or verified issuer balances.
 
 ## Recovery and Verification
 
-The picker uses the existing versioned metadata contract. JSON/CSV v2 exports,
-v1 imports, immutable history, drafts and device snapshots preserve selections.
+The picker uses the existing versioned metadata contract. JSON v3 and CSV v2
+exports, v1/v2 imports, immutable history, drafts and device snapshots preserve selections.
 Wallet search checks the editable title, saved names, current aliases and
 amount/issuer text. Wallet cards, history and printable output show saved details,
 with manual balances labelled explicitly.

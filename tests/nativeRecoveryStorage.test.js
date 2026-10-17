@@ -21,3 +21,11 @@ test("large recovery checkpoints use files and switch the pointer only after a s
   expect(await storage.getItem("checkpoint")).toBe(large);
   expect(pointers.setItem.mock.calls.every(([_key, value]) => value.length === 1)).toBe(true);
 });
+test("a failed pointer commit keeps the previous file readable and allows a later retry", async () => {
+  await storage.setItem("checkpoint", "previous");
+  pointers.setItem.mockRejectedValueOnce(new Error("Pointer full"));
+  await expect(storage.setItem("checkpoint", "next")).rejects.toThrow("Pointer full");
+  expect(await storage.getItem("checkpoint")).toBe("previous");
+  await storage.setItem("checkpoint", "retried");
+  expect(await storage.getItem("checkpoint")).toBe("retried");
+});

@@ -2,7 +2,7 @@ const { catalogue } = require("./catalogueFixtures");
 const { normaliseCoupon } = require("../src/utils/couponModel");
 const { BACKUP_VERSION, CSV_FIELDS, LEGACY_CSV_FIELDS, toCsv, parseBackup, planRestore, validateBackupRecords } = require("../src/utils/backupData");
 const coupon = (changes = {}) => ({ brand: "폴바셋 룽고 쿠폰", kind: "voucher", barcodeType: "code128", barcodeNumber: "00-12 34", expiryDay: "2027-01-01", isUsed: false, ...changes });
-const json = (records, version = BACKUP_VERSION) => JSON.stringify({ app: "wallet-sync", version, records });
+const json = (records, version = BACKUP_VERSION) => JSON.stringify({ app: "wallet-sync", version, records, ...(version === 3 ? { brandPreferences: null } : {}) });
 
 test("original v1 JSON and fixed-column CSV import without guessing catalogue fields", () => {
   const legacy = coupon({ conditions: 'Line one, "quoted"\nLine two' });
@@ -13,7 +13,7 @@ test("original v1 JSON and fixed-column CSV import without guessing catalogue fi
     expect(restored.catalogue).toBeNull();
   }
 });
-test("v2 JSON and CSV recover exact metadata, manual balances and barcode text", () => {
+test("v2/v3 JSON and CSV recover exact metadata, manual balances and barcode text", () => {
   const product = normaliseCoupon(coupon({ catalogue: catalogue() }));
   const monetary = normaliseCoupon(coupon({ barcodeNumber: "other", catalogue: catalogue({ benefitType: "monetary", money: {
     currency: "KRW", faceValue: 10000, purchasePrice: 9000, remainingBalance: 0, balanceMode: "manual",
@@ -21,9 +21,9 @@ test("v2 JSON and CSV recover exact metadata, manual balances and barcode text",
   const unknown = normaliseCoupon({ ...monetary, barcodeNumber: "unknown", catalogue: { ...monetary.catalogue,
     money: { ...monetary.catalogue.money, remainingBalance: null } } });
   const records = [product, monetary, unknown];
-  expect(BACKUP_VERSION).toBe(2);
+  expect(BACKUP_VERSION).toBe(3);
   expect(CSV_FIELDS).toEqual([...LEGACY_CSV_FIELDS, "catalogue"]);
-  for (const restored of [parseBackup(json(records), "json"), parseBackup(toCsv(records), "csv")]) {
+  for (const restored of [parseBackup(json(records, 2), "json"), parseBackup(json(records), "json"), parseBackup(toCsv(records), "csv")]) {
     expect(restored).toEqual(records.map((record) => ({ ...record, deletedAt: null, original: null })));
   }
 });
@@ -34,7 +34,7 @@ test("v2 metadata escapes formula-like text and multiline content reversibly", (
 });
 test("future metadata and malformed CSV fail rather than losing information", () => {
   const valid = normaliseCoupon(coupon({ catalogue: catalogue() }));
-  expect(() => parseBackup(json([valid], 3), "json")).toThrow("버전");
+  expect(() => parseBackup(json([valid], 4), "json")).toThrow("버전");
   expect(() => parseBackup(json([valid, coupon({ catalogue: { ...catalogue(), schemaVersion: 2 } })]), "json")).toThrow("2번째");
   expect(() => parseBackup(toCsv([valid]).replace('""schemaVersion"":1', '""schemaVersion"":2'), "csv")).toThrow("카탈로그");
   expect(() => parseBackup(toCsv([valid]).replace('"catalogue"', '"catalogue","future"'), "csv")).toThrow("열 형식");
