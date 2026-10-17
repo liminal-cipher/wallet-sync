@@ -1,8 +1,8 @@
 jest.mock("react-native", () => ({ Platform: { OS: "web" } }));
 jest.mock("expo-file-system/legacy", () => ({}));
-jest.mock("expo-sharing", () => ({}));
+jest.mock("expo-sharing", () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock("expo-document-picker", () => ({}));
-jest.mock("expo-print", () => ({}));
+jest.mock("expo-print", () => ({ printToFileAsync: jest.fn() }));
 jest.mock("../src/services/firebase", () => ({ auth: { currentUser: { uid: "owner" } } }));
 jest.mock("../src/services/firestoreService", () => ({ addCoupon: jest.fn(), fetchCoupons: jest.fn() }));
 jest.mock("../src/services/imageService", () => ({ imageDataUri: jest.fn(), importImage: jest.fn(), uploadOriginal: jest.fn() }));
@@ -95,5 +95,18 @@ describe("portable export contract", () => {
     const records = [{ ...record("one"), catalogue: catalogue({ money: { currency: "KRW", faceValue: NaN } }) }];
     await expect(exportWallet("json", false, records)).rejects.toThrow("faceValue");
     expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+  test("printable output includes saved catalogue details and escapes untrusted names", async () => {
+    const { Platform } = require("react-native"), print = require("expo-print"), sharing = require("expo-sharing");
+    Platform.OS = "android";
+    print.printToFileAsync.mockResolvedValue({ uri: "test-wallet.pdf" });
+    sharing.isAvailableAsync.mockResolvedValue(true);
+    try {
+      await exportWallet("pdf", false, [{ ...record("one"), catalogue: catalogue({ issuer: "<script>untrusted</script>" }) }]);
+      const html = print.printToFileAsync.mock.calls[0][0].html;
+      expect(html).toContain("룽고"); expect(html).toContain("5,000");
+      expect(html).toContain("https://example.com/menu");
+      expect(html).toContain("&lt;script&gt;untrusted&lt;/script&gt;"); expect(html).not.toContain("<script>");
+    } finally { Platform.OS = "web"; }
   });
 });

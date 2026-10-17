@@ -30,6 +30,9 @@ import { imageDataUri } from "../../services/imageService";
 import { openOriginalProvider } from "../../services/providerLinks";
 import { Alert } from "../../utils/feedback";
 import { Button, ui } from "../../components/WalletUi";
+import BrandIcon from "../../components/BrandIcon";
+import CatalogueDetails from "../../components/CatalogueDetails";
+import { findBrand } from "../../utils/brandCatalogue";
 
 export default function HomeScreen() {
   const [coupons, setCoupons] = useState([]);
@@ -185,6 +188,7 @@ export default function HomeScreen() {
         ]}
       >
         <View style={styles.cardHeader}>
+          {item.catalogue && <BrandIcon brand={findBrand(item.catalogue.brandId) || { name: item.catalogue.snapshot?.brandName }} />}
           <Text style={[styles.brandText, item.isUsed && styles.usedText]}>
             {item.brand}
           </Text>
@@ -222,6 +226,7 @@ export default function HomeScreen() {
         </TouchableOpacity>}
 
         <Text style={styles.expiryText}>만료일: {formattedDate}</Text>
+        {item.catalogue && <CatalogueDetails record={item} />}
         {item.image && !item.image.cloudPath && <Text style={ui.note}>원본은 등록한 기기에 보관돼 있습니다. 수정 후 저장하면 클라우드 보관을 다시 시도합니다.</Text>}
         {item.kind !== "external" && !!item.conditions && <Text style={ui.note}>{item.conditions}</Text>}
         <View style={ui.row}>

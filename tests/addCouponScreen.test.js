@@ -22,15 +22,20 @@ const Screen = require("../src/screens/home/AddCouponScreen").default;
 const firestore = require("../src/services/firestoreService");
 const local = require("../src/services/localRecovery");
 const images = require("../src/services/imageService");
+const { auth } = require("../src/services/firebase");
+const { Alert } = require("../src/utils/feedback");
 const { catalogue } = require("./catalogueFixtures");
 const { normaliseCatalogueMetadata } = require("../src/utils/catalogueModel");
-let renderer, navigation;
+let renderer, navigation, localValues;
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const field = (label) => renderer.root.findAllByType("TextInput").find((node) => node.props.accessibilityLabel === label);
 const button = (label) => renderer.root.findAllByType("TouchableOpacity").find((node) => node.findAllByType("Text").some((text) => text.children.join("") === label));
+const accessibleButton = (label) => renderer.root.findAllByType("TouchableOpacity").find((node) => node.props.accessibilityLabel === label);
 beforeEach(() => {
   jest.clearAllMocks(); navigation = { goBack: jest.fn() };
-  local.readLocal.mockResolvedValue(null); local.writeLocal.mockResolvedValue();
+  auth.currentUser = { uid: "owner" }; localValues = new Map();
+  local.readLocal.mockImplementation(async (_uid, section) => localValues.get(section) || null);
+  local.writeLocal.mockImplementation(async (_uid, section, value) => localValues.set(section, value));
   images.uploadOriginal.mockResolvedValue({ image: null, localOnly: false });
 });
 afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); renderer = null; });
@@ -72,10 +77,89 @@ test("the unchanged editor and its recovery draft preserve catalogue metadata on
   expect(local.writeLocal).toHaveBeenLastCalledWith("owner", "draft:catalogue-coupon", expect.objectContaining({ form: expect.objectContaining({ catalogue: metadata }) }));
   const draft = local.writeLocal.mock.calls.at(-1)[2];
   await act(async () => { renderer.unmount(); });
-  local.readLocal.mockResolvedValue(draft);
+  local.readLocal.mockImplementation(async (_uid, section) => section === "draft:catalogue-coupon" ? draft : null);
   firestore.updateCoupon.mockResolvedValue();
   await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: { params: { id: "catalogue-coupon" } } })); await flush(); });
   await act(async () => { button("입력 초안 복원").props.onPress(); });
   await act(async () => { await button("변경 저장").props.onPress(); });
   expect(firestore.updateCoupon).toHaveBeenLastCalledWith("catalogue-coupon", expect.objectContaining({ catalogue: metadata }), 3);
+});
+test("brand and product search registers a generated title without typing one", async () => {
+  firestore.addCoupon.mockResolvedValue({ id: "new" });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => { field("브랜드·메뉴 검색").props.onChangeText("폴바셋룽고"); });
+  await act(async () => { accessibleButton("폴 바셋 룽고 선택").props.onPress(); });
+  expect(field("브랜드·상품명 / 이벤트명").props.value).toBe("폴 바셋 · 룽고");
+  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("00-12 34"); });
+  await act(async () => { await button("등록하기").props.onPress(); });
+  expect(firestore.addCoupon).toHaveBeenCalledWith(expect.objectContaining({ brand: "폴 바셋 · 룽고", barcodeNumber: "00-12 34",
+    catalogue: expect.objectContaining({ brandId: "paul-bassett", productId: "lungo", variantId: null }) }));
+  expect(localValues.get("brand-preferences").recent).toEqual(["paul-bassett"]);
+  expect(localValues.get("draft:new")).toBeNull();
+});
+test("favourite selection survives reopening the picker and is available before registration", async () => {
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => { await accessibleButton("폴 바셋 즐겨찾기 추가").props.onPress(); });
+  await act(async () => { button("즐겨찾기").props.onPress(); });
+  expect(accessibleButton("폴 바셋 선택")).toBeTruthy();
+  expect(accessibleButton("메가MGC커피 선택")).toBeUndefined();
+  await act(async () => { renderer.unmount(); });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => { button("즐겨찾기").props.onPress(); });
+  expect(accessibleButton("폴 바셋 즐겨찾기 제거").props.accessibilityState.selected).toBe(true);
+});
+test("a retail amount voucher needs no menu and preserves zero separately from unknown", async () => {
+  firestore.addCoupon.mockResolvedValue({ id: "value" });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => { accessibleButton("다이소 선택").props.onPress(); });
+  expect(field("메뉴 검색")).toBeUndefined();
+  await act(async () => { button("10,000원 입력").props.onPress(); });
+  await act(async () => { field("남은 금액 (원, 수동 기록)").props.onChangeText("0"); });
+  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("V-00 123"); });
+  await act(async () => { await button("등록하기").props.onPress(); });
+  expect(firestore.addCoupon.mock.calls.at(-1)[0]).toMatchObject({ brand: "다이소 · 10,000원 금액권", catalogue: { productId: null, money: { faceValue: 10000, remainingBalance: 0, balanceMode: "manual", purchasePrice: null } } });
+});
+test("invalid amount buffers block saving and remain in the recovery draft", async () => {
+  firestore.addCoupon.mockReset();
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => { accessibleButton("다이소 선택").props.onPress(); });
+  await act(async () => { field("액면금액 (원)").props.onChangeText("10x"); });
+  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("AB-1234"); });
+  await act(async () => { await button("등록하기").props.onPress(); });
+  expect(firestore.addCoupon).not.toHaveBeenCalled();
+  expect(localValues.get("draft:new").form.catalogueMoneyInput.faceValue).toBe("10x");
+  expect(navigation.goBack).not.toHaveBeenCalled();
+});
+test("changing brands clears incompatible product and size selections without changing the barcode", async () => {
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => { accessibleButton("폴 바셋 선택").props.onPress(); });
+  await act(async () => { button("아이스 카페라떼").props.onPress(); });
+  await act(async () => { button("Grand").props.onPress(); });
+  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("00-12 34"); button("브랜드 변경").props.onPress(); });
+  await act(async () => { accessibleButton("다이소 선택").props.onPress(); });
+  expect(localValues.get("draft:new").form.catalogue).toMatchObject({ brandId: "daiso", productId: null, variantId: null });
+  expect(field("바코드 원문 (공백·하이픈도 보존)").props.value).toBe("00-12 34");
+});
+test("OCR proposes a new brand without silently replacing an existing selection", async () => {
+  const { chooseCatalogue } = require("../src/utils/catalogueForm");
+  firestore.getCoupon.mockResolvedValue({ ...chooseCatalogue({ brand: "", barcodeNumber: "AB-1234", expiryDay: "2027-01-01" }, "paul-bassett", "lungo"), id: "old", revision: 1 });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: { params: { id: "old" } } })); await flush(); });
+  await act(async () => { button("텍스트 분석").props.onPress(); });
+  await act(async () => { field("쿠폰 메시지·인식된 텍스트").props.onChangeText("메가커피 아메리카노"); });
+  await act(async () => { button("분석해 입력란에 적용").props.onPress(); });
+  expect(field("브랜드·상품명 / 이벤트명").props.value).toBe("폴 바셋 · 룽고");
+  expect(button("후보: 메가MGC커피 · 아메리카노")).toBeTruthy();
+});
+test("failure to remember a saved brand does not resubmit or report the coupon as unsaved", async () => {
+  firestore.addCoupon.mockResolvedValue({ id: "saved" });
+  local.writeLocal.mockImplementation(async (_uid, section, value) => {
+    if (section === "brand-preferences") throw new Error("Storage full"); localValues.set(section, value);
+  });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => { accessibleButton("폴 바셋 선택").props.onPress(); });
+  await act(async () => { button("룽고").props.onPress(); field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("AB-1234"); });
+  await act(async () => { await button("등록하기").props.onPress(); });
+  expect(firestore.addCoupon).toHaveBeenCalledTimes(1);
+  expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  expect(Alert.alert).toHaveBeenCalledWith("저장 완료", expect.stringContaining("최근 선택"));
 });

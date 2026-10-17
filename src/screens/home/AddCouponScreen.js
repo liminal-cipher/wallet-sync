@@ -4,6 +4,9 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { Page, Field, Button, Choices, ui } from "../../components/WalletUi";
 import BarcodeRenderer from "../../components/BarcodeRenderer";
+import BrandPicker from "../../components/BrandPicker";
+import { prepareCatalogueForm } from "../../utils/catalogueForm";
+import { rememberBrand } from "../../services/brandPreferences";
 import { addCoupon, getCoupon, updateCoupon } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
 import { readLocal, writeLocal } from "../../services/localRecovery";
@@ -72,11 +75,12 @@ export default function AddCouponScreen({ navigation, route }) {
   const applyText = () => {
     const parsed = parseVoucherText(text);
     const fields = {};
-    if (parsed.brand) fields.brand = parsed.brand;
+    if (parsed.brand && !form.catalogue) fields.brand = parsed.brand;
+    fields.catalogueSuggestionText = text;
     if (parsed.barcodeNumber) { fields.barcodeNumber = parsed.barcodeNumber; fields.barcodeType = "code128"; }
     if (parsed.expiryDate) fields.expiryDay = toDay(parsed.expiryDate);
     changeFields(fields); setSmart(false);
-    if (!Object.keys(fields).length) Alert.alert("분석 결과", "자동으로 추출하지 못했습니다. 원본을 확인해 직접 입력해 주세요.");
+    if (!parsed.brand && !parsed.barcodeNumber && !parsed.expiryDate) Alert.alert("분석 결과", "자동으로 추출하지 못했습니다. 원본을 확인해 직접 입력해 주세요.");
   };
   const openScanner = async () => {
     if (Platform.OS === "web") return Alert.alert("안내", "웹에서는 바코드를 직접 입력하거나 원본 이미지를 보관해 주세요.");
@@ -108,7 +112,7 @@ export default function AddCouponScreen({ navigation, route }) {
     saving.current = true; setBusy(true); setError("");
     try {
       if (uid !== auth.currentUser?.uid) throw new Error("계정이 변경됐습니다.");
-      const data = normaliseCoupon(form);
+      const data = normaliseCoupon(prepareCatalogueForm(form));
       if (!data.expiryDay) throw new Error("유효한 만료일을 입력해 주세요 (YYYY-MM-DD).");
       if (data.kind === "voucher") barcodeSvg(data.barcodeNumber, data.barcodeType);
       // Persist a final recovery draft before attempting the network write.
@@ -118,6 +122,10 @@ export default function AddCouponScreen({ navigation, route }) {
       if (id) await updateCoupon(id, { ...data, image: uploaded.image }, revision);
       else await addCoupon({ ...data, image: uploaded.image });
       saved.current = true;
+      if (data.catalogue?.brandId) {
+        try { await rememberBrand(uid, data.catalogue.brandId); }
+        catch { Alert.alert("저장 완료", "쿠폰은 저장됐지만 최근 선택 브랜드를 기기에 보관하지 못했습니다."); }
+      }
       try { await writeLocal(uid, section, null); }
       catch { Alert.alert("저장 완료", "쿠폰은 저장됐지만 기기 초안을 정리하지 못했습니다. 같은 쿠폰은 중복 등록되지 않습니다."); }
       if (uploaded.localOnly) Alert.alert("원본은 이 기기에 보관됨", "쿠폰은 저장됐습니다. 원본 이미지의 클라우드 보관은 확인하지 못했습니다. 보관·복원에서 이미지 포함 JSON 백업을 별도로 저장해 주세요.");
@@ -142,6 +150,7 @@ export default function AddCouponScreen({ navigation, route }) {
       <Button label="텍스트 분석" secondary onPress={() => setSmart(true)} disabled={busy || !ready} />
       <Button label={processing ? "이미지 인식 중..." : "이미지 보관·인식"} secondary onPress={pickImage} disabled={busy || processing || !ready} />
     </View>
+    <BrandPicker form={form} onChange={changeFields} uid={uid} disabled={busy || processing || !ready} />
     <Field label="브랜드·상품명 / 이벤트명" value={form.brand} onChangeText={(v) => change("brand", v)} maxLength={200} editable={ready && !busy} />
     {form.kind === "voucher" && <>
       <Text style={ui.label}>바코드 종류</Text>

@@ -5,6 +5,7 @@ import { Page, Button, ui } from "../../components/WalletUi";
 import { fetchCouponHistory, getCoupon, restoreCouponVersion } from "../../services/firestoreService";
 import { toDay, toDate } from "../../utils/dateUtils";
 import { confirmAction } from "../../utils/feedback";
+import CatalogueDetails from "../../components/CatalogueDetails";
 
 export default function CouponHistoryScreen({ navigation, route }) {
   const [versions, setVersions] = useState([]);
@@ -37,6 +38,7 @@ export default function CouponHistoryScreen({ navigation, route }) {
       <Text selectable style={ui.note}>{record.barcodeType || "code128"}: {record.barcodeNumber}</Text>
       <Text style={ui.note}>{toDay(record.expiryDay || record.expiryDate)} · {record.deletedAt ? "휴지통" : record.isUsed ? "사용 완료" : "미사용"}</Text>
       <Text style={ui.note}>{record.conditions}</Text>
+      {record.catalogue && <CatalogueDetails record={record} />}
       <Button label="이 버전 복원" secondary disabled={busy} onPress={() => restore(version)} />
     </View>)}
     <Button label="이력 새로고침" secondary disabled={busy} onPress={() => load().catch((e) => setError(e.message))} />

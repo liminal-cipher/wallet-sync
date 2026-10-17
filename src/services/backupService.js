@@ -11,6 +11,7 @@ import { normaliseCoupon } from "../utils/couponModel";
 import { BACKUP_VERSION, toCsv, parseBackup, planRestore, validateBackupRecords, escapeHtml } from "../utils/backupData";
 import { barcodeSvg } from "../utils/barcodes";
 import { selectBackupRange } from "../utils/backupRange";
+import { catalogueDetailLines } from "../utils/catalogueDisplay";
 
 const assertAccount = (uid) => { if (!uid || auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다. 다시 시도해 주세요."); };
 async function shareText(text, extension, mimeType) {
@@ -60,7 +61,7 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
   const html = `<html><head><meta charset="utf-8"><style>body{font-family:sans-serif}article{page-break-inside:avoid;border:1px solid #ccc;padding:18px;margin:20px}svg{max-width:100%;height:100px}p{white-space:pre-wrap;word-break:break-all}</style></head><body><h1>WalletSync</h1>${portable.map((record) => {
     let barcode = "";
     try { if (record.kind !== "external") barcode = barcodeSvg(record.barcodeNumber, record.barcodeType); } catch { barcode = "<p>Barcode unavailable; check the original.</p>"; }
-    return `<article><h2>${escapeHtml(record.brand)}</h2><p>${escapeHtml(record.expiryDay)} · ${record.deletedAt ? "Trash" : record.isUsed ? "Used" : "Unused"}</p>${barcode}<p>${escapeHtml(record.barcodeNumber)}</p><p>${escapeHtml(record.conditions)}</p><p>${escapeHtml(record.sourceUrl)}</p></article>`;
+    return `<article><h2>${escapeHtml(record.brand)}</h2><p>${escapeHtml(record.expiryDay)} · ${record.deletedAt ? "Trash" : record.isUsed ? "Used" : "Unused"}</p>${barcode}<p>${escapeHtml(record.barcodeNumber)}</p>${catalogueDetailLines(record).map((line) => `<p>${escapeHtml(line)}</p>`).join("")}<p>${escapeHtml(record.conditions)}</p><p>${escapeHtml(record.sourceUrl)}</p></article>`;
   }).join("")}</body></html>`;
   if (Platform.OS === "web") {
     // expo-print's web implementation prints the current page and ignores HTML.
