@@ -108,7 +108,7 @@ tests. Browser checks used synthetic vouchers and local authentication/data serv
 - **Recovery has explicit boundaries.** File backups contain current coupon records, including trash, rather than historical versions, drafts or reminder preferences. See [Recovery and Data Handling](docs/recovery.md).
 - **Catalogue coverage is deliberately limited.** The 17 entries have 57 selected products, with custom entry for missing products. Fourteen official-site identity images are bundled; Olive Young and Coffee Bean use text tiles. There is no live price feed or issuer balance synchronisation. See [Brand Selection, Search and Favourites](docs/brand-catalogue.md).
 - **Browser and device verification have different boundaries.** Local-emulator browser checks cover registration, wallet search, favourites, recent choices and manual balance edits. The browser confirmation dialogue prevented automated history restoration; emulator tests cover that transaction. Physical-device OCR accuracy, checkout scans and native file sharing remain unmeasured.
-- **Existing dependency maintenance remains pending.** `npm audit` reports advisories in the existing Expo/React Native toolchain. Expo's compatibility check also flags the existing Expo patch and standalone Jest version; new feature dependencies do not add advisory entries in the baseline comparison.
+- **Dependency maintenance retains explicit limits.** Expo SDK 54 and Jest compatibility checks pass after maintenance updates. The audit reports zero Critical entries, with 54 affected package entries originating in six remaining advisories. Expo Doctor still flags the OCR library as untested on the New Architecture. See [Dependency Maintenance](docs/dependency-maintenance.md) for the update scope, remaining advisory paths and verification commands.
 
 ## Getting Started
 
@@ -126,7 +126,7 @@ updates under these rules. This repository does not deploy rules automatically.
 
 ### Local Installation
 
-Prerequisites: Node.js 20 or later, and Expo CLI.
+Prerequisites: Node.js 20.19.4 or later, and Expo CLI.
 
 For native builds, first set your own `ios.bundleIdentifier` and `android.package`
 in `app.json`; native build tools must also be installed for the target platform.
