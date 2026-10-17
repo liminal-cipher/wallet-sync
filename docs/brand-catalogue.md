@@ -92,6 +92,7 @@ Firestore/Storage emulator tests exercise save/history/recovery boundaries.
 Browser checks use only local emulators and synthetic `DEMO-` barcode data.
 
 Native installation, physical scanners and OS-specific image decoding require
-device acceptance checks. Browser confirmation-dialog automation could not
-complete historical restoration in this session; emulator integration tests
-cover the corresponding transaction and restore behaviour.
+device acceptance checks. Recovery now uses in-app confirmation dialogues with
+component tests for consent, cancellation and historical restoration. Current
+Windows browser automation could not run because its URL-policy enforcement was
+unsupported; actual browser verification of these new dialogues remains outstanding.

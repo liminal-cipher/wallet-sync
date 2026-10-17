@@ -107,8 +107,8 @@ tests. Browser checks used synthetic vouchers and local authentication/data serv
 - **Originals have a local fallback.** Failed cloud uploads retain the image on the registering device and are labelled accordingly. JSON with originals is the portable recovery path.
 - **Recovery has explicit boundaries.** JSON v3 backups contain current coupons, trash and optional brand favourites/recent choices. They do not contain historical versions, drafts or reminder preferences. Settings restore only by explicit choice, with a pre-restore copy retained. JSON v1/v2 and CSV imports remain supported. See [Recovery and Data Handling](docs/recovery.md).
 - **Catalogue coverage is deliberately limited.** The 17 entries have 57 selected products, with custom entry for missing products. Fourteen official-site identity images are bundled; Olive Young and Coffee Bean use text tiles. There is no live price feed or issuer balance synchronisation. See [Brand Selection, Search and Favourites](docs/brand-catalogue.md).
-- **Browser and device verification have different boundaries.** Local-emulator browser checks cover registration, wallet search, favourites, recent choices and manual balance edits. The browser confirmation dialogue prevented automated history restoration; emulator tests cover that transaction. Physical-device OCR accuracy, checkout scans and native file sharing remain unmeasured.
-- **Dependency maintenance retains explicit limits.** Expo SDK 54 and Jest compatibility checks pass after maintenance updates. The audit reports zero Critical entries, with 54 affected package entries originating in six remaining advisories. Expo Doctor still flags the OCR library as untested on the New Architecture. See [Dependency Maintenance](docs/dependency-maintenance.md) for the update scope, remaining advisory paths and verification commands.
+- **Browser and device verification have different boundaries.** Earlier local-emulator browser checks cover registration, wallet search, favourites, recent choices and manual balance edits. New preference consent and in-app history confirmations have component coverage; current Windows browser automation was unavailable because URL-policy enforcement was unsupported. Physical-device OCR accuracy, checkout scans and native file sharing remain unmeasured.
+- **Dependency maintenance retains explicit limits.** Expo SDK 55 and Jest compatibility checks pass after an incremental upgrade. The audit reports zero Critical entries, with 52 affected package entries originating in four remaining advisories. Expo Doctor passes 19 of 20 checks and still flags the OCR library as untested on the New Architecture. See [Dependency Maintenance](docs/dependency-maintenance.md) for the update scope, remaining advisory paths and verification commands.
 
 ## Getting Started
 
@@ -126,7 +126,8 @@ updates under these rules. This repository does not deploy rules automatically.
 
 ### Local Installation
 
-Prerequisites: Node.js 20.19.4 or later, and Expo CLI.
+Prerequisites: an SDK 55-supported Node.js release (24.20.0 used for verification)
+and Expo CLI. Native iOS compilation requires Xcode 26.
 
 For native builds, first set your own `ios.bundleIdentifier` and `android.package`
 in `app.json`; native build tools must also be installed for the target platform.

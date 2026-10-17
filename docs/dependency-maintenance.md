@@ -1,10 +1,44 @@
 # Dependency Maintenance
 
-Checked on 2026-10-17 with Node.js 24.20.0 and npm 11.19.0. This maintenance
-retains Expo SDK 54, React Native 0.81.5 and React 19.1.0. It does not migrate
-native APIs or deploy backend changes.
+Current runtime checked on 2026-10-18 with Node.js 24.20.0 and npm 11.19.0:
+Expo 55.0.31, React Native 0.83.10 and React 19.2.0. The SDK 54 maintenance
+record below is retained to explain the audit baseline and scoped patches.
+No backend changes were deployed.
 
-## Updates
+## SDK 55 Follow-up
+
+The next incremental upgrade follows the [SDK 55 release notes](https://expo.dev/changelog/sdk-55).
+Expo modules, React Native, React DOM, React Test Renderer, screens and SVG
+versions match the SDK's bundled version map. Jest and babel-jest remain 29.7.0.
+The removed `newArchEnabled` and `android.edgeToEdgeEnabled` configuration flags
+were removed from this app's configuration. New Architecture remains mandatory;
+the experimental Hermes v1 option was not enabled.
+
+The PostCSS override was removed: `@expo/metro-config@55.0.27` now permits
+PostCSS 8.5.30 directly. The scoped gRPC 1.13.6 override remains necessary for
+Firestore's older dependency range. The vulnerable `image-size` dependency is
+absent from the SDK 55 lockfile.
+
+| Audit measure | SDK 54 after maintenance | SDK 55 |
+| --- | --- | --- |
+| Critical package entries | 0 | 0 |
+| High package entries | 41 | 40 |
+| Moderate package entries | 13 | 12 |
+| Total affected package entries | 54 | 52 |
+| Distinct advisory URLs | 6 | 4 |
+
+The four remaining advisories originate in braces, node-forge, sprintf-js and
+uuid, described in the initial audit below. The audit remains enabled and exits
+with code 1. Clean installation, the complete dependency tree, SDK version
+compatibility, configuration/plugin introspection, 224 emulator tests and all
+three platform JavaScript exports passed. Expo Doctor passed 19 of 20 checks;
+the existing OCR New Architecture metadata warning remains visible.
+
+JavaScript exports and configuration introspection are not native compilations.
+An SDK upgrade requires rebuilding native development clients. SDK 55's iOS
+builds require Xcode 26, and physical-device OCR acceptance remains outstanding.
+
+## Initial SDK 54 Updates
 
 | Area | Previous | Installed | Reason |
 | --- | --- | --- | --- |
@@ -34,7 +68,7 @@ Two scoped overrides address restrictive upstream ranges:
 Reassess these overrides when their parent packages adopt fixed dependencies.
 No global major-version override or forced audit fix is used.
 
-## Audit Results
+## Initial SDK 54 Audit Results
 
 The following are npm audit's affected-package counts, including parent packages
 that inherit an advisory through dependencies. They are not counts of distinct
@@ -69,13 +103,13 @@ SDK versions incrementally.
 
 ## Reproducing the Checks
 
-The maintenance verification passed a clean `npm ci`, the complete dependency
-tree check, Expo's version compatibility check, all 205 tests across 25 suites
+The current verification passed a clean `npm ci`, the complete dependency
+tree check, Expo's version compatibility check, all 224 tests across 27 suites
 with local Firestore/Storage emulators, and web/iOS/Android JavaScript exports.
-No tests were skipped. Expo Doctor passed 17 of 18 checks, with the OCR metadata
+No tests were skipped. Expo Doctor passed 19 of 20 checks, with the OCR metadata
 warning described below remaining unresolved.
 
-Use Node.js 20.19.4 or later, as required by React Native 0.81.5, and Java 21 for
+Use an SDK 55-supported Node.js release (24.20.0 was verified) and Java 21 for
 the local emulators. Install from the committed lockfile:
 
 ```sh
