@@ -28,6 +28,14 @@ managed disaster-recovery service or a substitute for externally stored backups.
 
 ## Backup Formats
 
+New JSON and CSV exports use version 2 and preserve optional catalogue snapshots,
+issuer/channel details and amount records. Existing version 1 JSON and the legacy
+ten-column CSV header remain importable. Unknown future formats fail visibly.
+Use the updated client for complete exports and historical restoration of
+metadata-bearing coupons; older clients omit these fields from their backups.
+See [Catalogue Metadata and Backup Compatibility](catalogue-data.md) for the
+schema, CSV column contract and mixed-client boundaries.
+
 - **JSON with originals** contains current records, trash state and embedded
   JPEG/PNG/WebP originals. Export fails visibly if an original cannot be retrieved;
   it never silently labels a partial image export as complete.
