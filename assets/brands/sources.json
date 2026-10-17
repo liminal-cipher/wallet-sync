@@ -1,0 +1,128 @@
+[
+  {
+    "id": "starbucks",
+    "file": "assets/brands/starbucks.png",
+    "sourcePage": "https://www.starbucks.co.kr/",
+    "assetUrl": "https://image.istarbucks.co.kr/common/img/common/logo.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "4451548cc899e914deb7842229633a3914b093f8caf5b52201fe3de85ca42af4",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "compose",
+    "file": "assets/brands/compose.png",
+    "sourcePage": "https://composecoffee.com/",
+    "assetUrl": "https://composecoffee.com/files/attach/xeicon/mobicon.png?t=1701247079",
+    "checkedOn": "2026-10-17",
+    "sha256": "a3eb67877a5b2298bea5c4ff9a8d067fa897392bdfdd1f09f3a6e3e58b10dfa1",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "mega",
+    "file": "assets/brands/mega.png",
+    "sourcePage": "https://www.mega-mgccoffee.com/about/bi/",
+    "assetUrl": "https://img.79plus.co.kr/megahp/common/img/new_logo.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "dd33bc4d26b76b35486d0da84a1b6d8df2ffcb38093350cf965c55d21a47154e",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "daiso",
+    "file": "assets/brands/daiso.png",
+    "sourcePage": "https://www.daiso.co.kr/company/bi",
+    "assetUrl": "https://www.daiso.co.kr/assets/images/img-logo-daiso.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "c844956e7a3c61854f2ab8da2dffdb7d00f1d448b62420fae5702afe7e47ae86",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "paul-bassett",
+    "file": "assets/brands/paul-bassett.png",
+    "sourcePage": "https://www.baristapaulbassett.co.kr/Index.pb",
+    "assetUrl": "https://www.baristapaulbassett.co.kr/images/common/favicon_196.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "b47d263bdef68bb4316a5aa219c34c6f8ab853034fafbf6783cc37033d32ea8a",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "hollys",
+    "file": "assets/brands/hollys.gif",
+    "sourcePage": "https://www.hollys.co.kr/menu/espresso.do",
+    "assetUrl": "https://www.hollys.co.kr/websrc/images/layout/logo_210302.gif",
+    "checkedOn": "2026-10-17",
+    "sha256": "080087783c7fd433aa176f8c190143fe1b9ffa3ed7c7642f08635909f2eb48f8",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "mammoth",
+    "file": "assets/brands/mammoth.png",
+    "sourcePage": "https://www.mmthcoffee.com/",
+    "assetUrl": "https://www.mmthcoffee.com/img/favicon.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "93b3ba5c364902ec0fe8176adeed26ec44d908ba8c698806933965855c7d1219",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "ediya",
+    "file": "assets/brands/ediya.gif",
+    "sourcePage": "https://www.ediya.com/contents/drink.html",
+    "assetUrl": "https://www.ediya.com/images/common/top_logo_240822.gif",
+    "checkedOn": "2026-10-17",
+    "sha256": "c98f3ef0f25f69f575a32e6bbc3cec9457eb4f711cb8b149cdef9b8e64303630",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "paik",
+    "file": "assets/brands/paik.png",
+    "sourcePage": "https://paikdabang.com/menu/menu_coffee/",
+    "assetUrl": "https://paikdabang.com/wp-content/uploads/2026/08/cropped-favicon-192x192.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "dacf2f011745eb32e11b80e59da91fd5e0cd239ffe2f6b6316fe15a1897619d6",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "gongcha",
+    "file": "assets/brands/gongcha.png",
+    "sourcePage": "https://www.gong-cha.co.kr/brand",
+    "assetUrl": "https://gong-cha.co.kr/favicon/apple-icon-180x180.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "22c41ad94b06b3d955ebabccdf9acf7682cdb03e0f0c66f114f170931298327c",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "baskin-robbins",
+    "file": "assets/brands/baskin-robbins.png",
+    "sourcePage": "https://www.baskinrobbins.co.kr/assets/css/app.css",
+    "assetUrl": "https://www.baskinrobbins.co.kr/assets/images/common/h_logo.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "85e486d635c73bde31d8ab8c1531f21e7b8b98efac8e96fd67df60387b6bbb4d",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "paris-baguette",
+    "file": "assets/brands/paris-baguette.png",
+    "sourcePage": "https://www.paris.co.kr/products/",
+    "assetUrl": "https://d2afncas1tel3t.cloudfront.net/wp-content/uploads/2019/09/cropped-PB_favicon-192x192.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "bee044b924b723ee6f415f5a9db8ca0e962934539e9f6d450cf8d27691327676",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "tous-les-jours",
+    "file": "assets/brands/tous-les-jours.png",
+    "sourcePage": "https://www.tlj.co.kr/index.asp",
+    "assetUrl": "https://www.tlj.co.kr/static/images/common/logo.png?v2503",
+    "checkedOn": "2026-10-17",
+    "sha256": "4eaead6f7347fdce5e04c2540f44e65e62b7e9dc6ca9d0393bab42f7beecf06a",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  },
+  {
+    "id": "dunkin",
+    "file": "assets/brands/dunkin.png",
+    "sourcePage": "https://www.dunkindonuts.co.kr/",
+    "assetUrl": "https://www.dunkindonuts.co.kr/images/favicon_180x180.png",
+    "checkedOn": "2026-10-17",
+    "sha256": "e42c7f3a01026035caf472d1abbd4285029eb05c51944b2545a2656389b8c042",
+    "usage": "Brand identification; retain original form and proportions. Not covered by the project licence."
+  }
+]

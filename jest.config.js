@@ -1,6 +1,6 @@
 module.exports = {
   testEnvironment: "node",
-  moduleNameMapper: { "^@bwip-js/generic$": "<rootDir>/node_modules/@bwip-js/generic/dist/bwip-js-gen.mjs" },
+  moduleNameMapper: { "^@bwip-js/generic$": "<rootDir>/node_modules/@bwip-js/generic/dist/bwip-js-gen.mjs", "\\.(png|gif)$": "<rootDir>/tests/assetMock.js" },
   transformIgnorePatterns: ["node_modules/(?!@bwip-js/generic/)"],
   transform: {
     "^.+\\.(js|mjs)$": [

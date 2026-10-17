@@ -1,4 +1,5 @@
 // Calendar dates deliberately have no UTC offset. Legacy timestamps remain readable.
+const { couponMatchesSearch } = require("./couponSearch");
 const toDate = (value) => {
   if (!value) return null;
   if (typeof value.toDate === "function") return value.toDate();
@@ -35,7 +36,7 @@ const getExpiryInfo = (expiryDate, isUsed, now = new Date()) => {
 const sortCouponsByExpiry = (coupons) => !Array.isArray(coupons) ? [] : [...coupons].sort((a, b) =>
   (dayNumber(a.expiryDay || a.expiryDate) ?? 0) - (dayNumber(b.expiryDay || b.expiryDate) ?? 0));
 const filterCoupons = (coupons, filter, search = "", now = new Date()) => coupons.filter((c) => {
-  if (c.deletedAt || !(c.brand || "").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) return false;
+  if (c.deletedAt || !couponMatchesSearch(c, search)) return false;
   const days = daysRemaining(c.expiryDay || c.expiryDate, now);
   if (filter === "used") return c.isUsed;
   if (filter === "expired") return !c.isUsed && days !== null && days < 0;
