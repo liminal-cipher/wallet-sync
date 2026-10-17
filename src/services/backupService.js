@@ -8,7 +8,7 @@ import { addCoupon, fetchCoupons } from "./firestoreService";
 import { imageDataUri, importImage, uploadOriginal } from "./imageService";
 import { serialise, captureSnapshot, writeLocal } from "./localRecovery";
 import { normaliseCoupon } from "../utils/couponModel";
-import { BACKUP_VERSION, toCsv, parseBackup, planRestore, escapeHtml } from "../utils/backupData";
+import { BACKUP_VERSION, toCsv, parseBackup, planRestore, validateBackupRecords, escapeHtml } from "../utils/backupData";
 import { barcodeSvg } from "../utils/barcodes";
 import { selectBackupRange } from "../utils/backupRange";
 
@@ -31,7 +31,9 @@ async function shareText(text, extension, mimeType) {
 export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null) {
   const uid = auth.currentUser?.uid;
   assertAccount(uid);
-  const records = serialise(sourceRecords ?? await fetchCoupons(uid));
+  const source = sourceRecords ?? await fetchCoupons(uid);
+  // Validate before JSON serialisation can turn non-finite amounts into null.
+  const records = serialise(source.map((record) => ({ ...record, ...normaliseCoupon(record) })));
   if (sourceRecords === null) await captureSnapshot(uid, records);
   const selected = selectBackupRange(records, range);
   if (selected.length > 2000) throw new Error("한 백업은 최대 2000개입니다. 시작·끝 번호를 조정해 나눠 내보내 주세요.");
@@ -95,6 +97,8 @@ export async function previewRestore(records) {
 export async function restoreRecords(records, onProgress = () => {}) {
   const uid = auth.currentUser?.uid;
   assertAccount(uid);
+  // Validate the entire input again before checkpointing or making server writes.
+  records = validateBackupRecords(records, { localImages: true });
   const current = await fetchCoupons(uid);
   await captureSnapshot(uid, current);
   // Persist the input and progress before any network mutation. A retry is additive.

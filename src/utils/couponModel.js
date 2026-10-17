@@ -1,4 +1,7 @@
 import { toDay } from "./dateUtils";
+import { normaliseCatalogueMetadata } from "./catalogueModel";
+import { safeSourceUrl } from "./sourceUrl";
+export { safeSourceUrl } from "./sourceUrl";
 
 export const BARCODE_TYPES = ["code128", "code39", "ean13", "ean8", "qr", "upc_a", "upc_e"];
 export const PROVIDERS = {
@@ -6,19 +9,6 @@ export const PROVIDERS = {
   kakaoPay: { label: "카카오페이", url: "https://www.kakaopay.com/" },
   other: { label: "기타", url: "" },
 };
-export function safeSourceUrl(value) {
-  if (!value) return "";
-  try {
-    if (typeof value !== "string") throw new Error();
-    const text = value.trim().replace(/^https:/i, "https:");
-    if (!/^https:\/\/[^/?#\s\\@]+(?:[/?#][^\s\\]*)?$/.test(text)) throw new Error();
-    const url = new URL(text);
-    if (url.protocol !== "https:" || !url.hostname || url.username || url.password) throw new Error();
-    // React Native's URL.href adds a trailing slash to paths. Preserve the source
-    // page verbatim so an event URL does not change between native and web.
-    return text;
-  } catch { throw new Error("공식 안내 페이지의 https 주소를 입력해 주세요."); }
-}
 export function normaliseCoupon(input) {
   const kind = input.kind || "voucher";
   if (!["voucher", "external"].includes(kind)) throw new Error("지원하지 않는 쿠폰 종류입니다.");
@@ -41,6 +31,7 @@ export function normaliseCoupon(input) {
     isUsed: input.isUsed ?? false, provider, conditions,
     sourceUrl: safeSourceUrl(input.sourceUrl || ""),
     image: validateImage(input.image),
+    catalogue: normaliseCatalogueMetadata(input.catalogue),
   };
 }
 export function validateImage(image) {

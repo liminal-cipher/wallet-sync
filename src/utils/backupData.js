@@ -1,8 +1,10 @@
-import { normaliseCoupon, couponIdentity } from "./couponModel";
+import { normaliseCoupon, couponIdentity, validateImage } from "./couponModel";
+import { normaliseCatalogueMetadata } from "./catalogueModel";
 import { toDate } from "./dateUtils";
 
-export const BACKUP_VERSION = 1;
-export const CSV_FIELDS = ["kind", "brand", "barcodeType", "barcodeNumber", "expiryDay", "isUsed", "provider", "conditions", "sourceUrl", "deletedAt"];
+export const BACKUP_VERSION = 2;
+export const LEGACY_CSV_FIELDS = ["kind", "brand", "barcodeType", "barcodeNumber", "expiryDay", "isUsed", "provider", "conditions", "sourceUrl", "deletedAt"];
+export const CSV_FIELDS = [...LEGACY_CSV_FIELDS, "catalogue"];
 const dangerousCell = /^[\s]*[=+\-@\t\r]/;
 const csvCell = (value) => {
   const text = String(value ?? "");
@@ -11,7 +13,7 @@ const csvCell = (value) => {
   return `"${safe.replace(/"/g, '""')}"`;
 };
 export const toCsv = (records) => "\ufeff" + [CSV_FIELDS.map(csvCell).join(","), ...records.map((record) =>
-  CSV_FIELDS.map((field) => csvCell(record[field])).join(","))].join("\r\n");
+  CSV_FIELDS.map((field) => csvCell(field === "catalogue" ? JSON.stringify(normaliseCatalogueMetadata(record.catalogue)) : record[field])).join(","))].join("\r\n");
 export function parseCsv(text) {
   const rows = []; let row = [], value = "", quoted = false, closed = false;
   const source = text.replace(/^\ufeff/, "");
@@ -33,12 +35,16 @@ export function parseCsv(text) {
   if (quoted) throw new Error("CSV 따옴표가 닫히지 않았습니다.");
   if (row.length || value) { row.push(value); rows.push(row); }
   const header = rows.shift();
-  if (!header || header.join("|") !== CSV_FIELDS.join("|")) throw new Error("WalletSync CSV 열 형식이 올바르지 않습니다.");
+  if (!header || ![CSV_FIELDS, LEGACY_CSV_FIELDS].some((fields) => header.join("|") === fields.join("|"))) throw new Error("WalletSync CSV 열 형식이 올바르지 않습니다.");
   return rows.filter((r) => r.some(Boolean)).map((r) => {
     if (r.length !== header.length) throw new Error("CSV 열 개수가 올바르지 않습니다.");
     const record = Object.fromEntries(header.map((field, i) => [field, r[i].startsWith("'") ? r[i].slice(1) : r[i]]));
     if (!["true", "false"].includes(record.isUsed)) throw new Error("CSV 사용 상태가 올바르지 않습니다.");
     record.isUsed = record.isUsed === "true";
+    if (header.includes("catalogue")) {
+      try { record.catalogue = normaliseCatalogueMetadata(JSON.parse(record.catalogue)); }
+      catch { throw new Error("CSV 카탈로그 정보를 읽지 못했습니다. 원본 백업을 확인해 주세요."); }
+    }
     return record;
   });
 }
@@ -62,7 +68,7 @@ export function validateBackupRecords(records, { localImages = false } = {}) {
         imageBytes += bytes;
       }
       if (imageBytes > 35 * 1024 * 1024) throw new Error("한 백업의 이미지 합계는 35MB 이하여야 합니다.");
-      return { ...data, image: localImages ? record.image || null : null, deletedAt, original };
+      return { ...data, image: localImages ? validateImage(record.image) : null, deletedAt, original };
     } catch (error) { throw new Error(`${index + 1}번째 쿠폰: ${error.message}`); }
   });
 }
@@ -71,7 +77,7 @@ export function parseBackup(text, format) {
   if (format === "csv") return validateBackupRecords(parseCsv(text));
   let backup;
   try { backup = JSON.parse(text.replace(/^\ufeff/, "")); } catch { throw new Error("JSON 백업을 읽을 수 없습니다."); }
-  if (backup?.app !== "wallet-sync" || backup.version !== BACKUP_VERSION) throw new Error("지원하는 WalletSync 백업 버전이 아닙니다.");
+  if (backup?.app !== "wallet-sync" || ![1, BACKUP_VERSION].includes(backup.version)) throw new Error("지원하는 WalletSync 백업 버전이 아닙니다.");
   return validateBackupRecords(backup.records);
 }
 export function planRestore(records, existing) {

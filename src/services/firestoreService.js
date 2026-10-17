@@ -118,5 +118,6 @@ export const restoreCouponVersion = async (id, version, expectedRevision) => {
   if (!snapshot.exists()) throw new Error("이전 버전을 찾을 수 없습니다.");
   const record = snapshot.data().record;
   if (record.userId !== requireUid()) throw new Error("다른 계정의 이력입니다.");
-  return updateCoupon(id, { ...record, deletedAt: record.deletedAt || null }, expectedRevision);
+  // A pre-catalogue version must clear metadata added by a later revision.
+  return updateCoupon(id, { ...record, catalogue: record.catalogue ?? null, deletedAt: record.deletedAt || null }, expectedRevision);
 };

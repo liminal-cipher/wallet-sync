@@ -7,6 +7,7 @@ const { normaliseCoupon } = require("../src/utils/couponModel");
 const { toCsv, parseBackup, planRestore, validateBackupRecords } = require("../src/utils/backupData");
 const { validateReminders } = require("../src/services/reminderSettings");
 const { backupRange, selectBackupRange } = require("../src/utils/backupRange");
+const { catalogue } = require("./catalogueFixtures");
 let values;
 const coupon = (overrides = {}) => ({ kind: "voucher", brand: "Coffee", barcodeType: "code128", barcodeNumber: "12-34 56", expiryDay: "2027-01-01", isUsed: false, ...overrides });
 beforeEach(() => {
@@ -60,6 +61,29 @@ test("drafts preserve Unicode and barcode punctuation per account", async () => 
   await writeLocal("one", "draft:new", { barcodeNumber: "안녕-12 34" });
   expect(await readLocal("one", "draft:new")).toEqual({ barcodeNumber: "안녕-12 34" });
   expect(await readLocal("two", "draft:new")).toBeNull();
+});
+test("drafts and automatic snapshots retain full catalogue snapshots and monetary unknowns", async () => {
+  const record = normaliseCoupon(coupon({ catalogue: catalogue({ benefitType: "monetary", money: {
+    currency: "KRW", faceValue: 10000, remainingBalance: null, balanceMode: "manual",
+  } }) }));
+  await writeLocal("catalogue-owner", "draft:new", { form: record, revision: 0 });
+  await captureSnapshot("catalogue-owner", [record]);
+  const draft = await readLocal("catalogue-owner", "draft:new");
+  const records = (await readLocal("catalogue-owner", "snapshots"))[0].records;
+  expect(draft.form).toEqual(record);
+  expect(validateBackupRecords(records, { localImages: true })[0]).toMatchObject(record);
+  expect(records[0].catalogue.money.remainingBalance).toBeNull();
+});
+test("invalid metadata cannot replace a valid recovery snapshot or draft", async () => {
+  const record = normaliseCoupon(coupon({ catalogue: catalogue() }));
+  await captureSnapshot("valid-metadata", [record]);
+  const original = await readLocal("valid-metadata", "snapshots");
+  const invalid = { ...record, catalogue: catalogue({ money: { currency: "KRW", faceValue: NaN } }) };
+  await expect(captureSnapshot("valid-metadata", [invalid])).rejects.toThrow("faceValue");
+  expect(await readLocal("valid-metadata", "snapshots")).toEqual(original);
+  await writeLocal("valid-metadata", "draft:new", { form: record });
+  await expect(writeLocal("valid-metadata", "draft:new", { form: invalid })).rejects.toThrow("faceValue");
+  expect((await readLocal("valid-metadata", "draft:new")).form).toEqual(record);
 });
 test("reminder preferences validate time boundaries and deduplicate target days", () => {
   expect(validateReminders({ enabled: true, hour: 23, minute: 59, days: [3, 0, 3] }).days).toEqual([3, 0]);

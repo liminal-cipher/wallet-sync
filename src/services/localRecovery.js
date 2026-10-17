@@ -1,9 +1,12 @@
 import storage from "./recoveryStorage";
+import { normaliseCatalogueMetadata } from "../utils/catalogueModel";
 
 const key = (uid, section) => `wallet-sync:v1:${encodeURIComponent(uid)}:${section}`;
 const queues = new Map();
 const writes = new Map();
 export const serialise = (value) => JSON.parse(JSON.stringify(value, (_key, item) => {
+  // Refuse invalid/future metadata before JSON can silently turn NaN into null.
+  if (_key === "catalogue" && item !== undefined && item !== null) return normaliseCatalogueMetadata(item);
   if (item && typeof item.toDate === "function") return item.toDate().toISOString();
   if (item && typeof item.seconds === "number" && typeof item.nanoseconds === "number") {
     return new Date(item.seconds * 1000 + item.nanoseconds / 1e6).toISOString();
@@ -19,7 +22,9 @@ export async function readLocal(uid, section, fallback = null) {
 export function writeLocal(uid, section, value) {
   if (!uid) return Promise.reject(new Error("로그인이 필요합니다."));
   const storageKey = key(uid, section);
-  const text = JSON.stringify(serialise(value));
+  let text;
+  try { text = JSON.stringify(serialise(value)); }
+  catch (error) { return Promise.reject(error); }
   const result = (writes.get(storageKey) || Promise.resolve()).catch(() => {}).then(() => storage.setItem(storageKey, text));
   writes.set(storageKey, result);
   return result;
