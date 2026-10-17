@@ -103,7 +103,7 @@ export async function previewRestore(input) {
   const uid = auth.currentUser?.uid;
   assertAccount(uid);
   const backup = validateRestoreInput(input, { localImages: true });
-  const current = await fetchCoupons(uid);
+  const current = backup.records.length ? await fetchCoupons(uid) : [];
   assertAccount(uid);
   return { ...planRestore(backup.records, current), ...backup, uid };
 }
@@ -119,10 +119,12 @@ export async function restoreWalletBackup(input, { onProgress = () => {}, includ
       mergePreferenceData(await loadBrandPreferences(uid), backup.brandPreferences);
       assertAccount(uid);
     }
-    const current = await fetchCoupons(uid);
+    const current = backup.records.length ? await fetchCoupons(uid) : [];
     assertAccount(uid);
-    await captureSnapshot(uid, current);
-    assertAccount(uid);
+    if (backup.records.length) {
+      await captureSnapshot(uid, current);
+      assertAccount(uid);
+    }
     const previous = await readLocal(uid, "restore");
     assertAccount(uid);
     if (previous) {

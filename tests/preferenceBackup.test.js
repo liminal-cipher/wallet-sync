@@ -53,6 +53,13 @@ test("preferences require explicit restoration and do not replace existing favou
   expect(values.get("brand-preferences")).toEqual({ version: 1, favourites: ["paul-bassett", "retired-brand", "mega"], recent: ["starbucks", "daiso"] });
   expect(values.get("brand-preferences:before-restore").preferences.favourites).toEqual(["paul-bassett"]);
 });
+test("settings-only backups restore offline without replacing a server snapshot with an empty copy", async () => {
+  server.fetchCoupons.mockRejectedValue(new Error("Offline"));
+  expect(await previewRestore(envelope([]))).toMatchObject({ records: [], skipped: 0, brandPreferences: preferences() });
+  await expect(restoreWalletBackup(envelope([]), { includePreferences: true })).resolves.toMatchObject({ added: 0, preferencesRestored: true });
+  expect(values.get("brand-preferences")).toEqual(preferences());
+  expect(server.fetchCoupons).not.toHaveBeenCalled(); expect(local.captureSnapshot).not.toHaveBeenCalled();
+});
 test("a setting write failure after coupon creation retains an input that resumes without duplicates", async () => {
   const write = local.writeLocal.getMockImplementation(); let fail = true;
   local.writeLocal.mockImplementation(async (uid, section, value) => {

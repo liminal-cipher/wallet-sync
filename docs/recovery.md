@@ -69,7 +69,8 @@ Brand settings require the explicit **브랜드 설정 함께 복원** option in
 and the in-app confirmation. Existing favourites are retained; imported IDs,
 including retired brands, are appended without duplicates. More than 100 combined
 favourites fails before coupon writes. Current recent choices take precedence,
-with at most twelve entries retained. Settings-only JSON backups can be restored.
+with at most twelve entries retained. Settings-only JSON backups can be restored
+offline; they do not create a misleading empty server snapshot.
 **브랜드 설정 복원 전으로 되돌리기** restores the saved pre-merge settings; the
 displaced settings become the next undo copy. A failed safety-copy write prevents
 the settings change.
