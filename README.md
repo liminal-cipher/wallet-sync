@@ -15,12 +15,18 @@ WalletSync treats a coupon as a record instead of a photo: it has a brand, a bar
 ## What It Does
 
 - Register, sign in and request password recovery; sessions persist across relaunches.
-- Add and edit coupons using camera scans, local image OCR, pasted text or manual input. Preserve the original payload and Code 128 · Code 39 · EAN · UPC · QR symbology.
-- Search by brand, filter active · used · expired · expiring-soon coupons, and configure expiry reminders per device. Calendar dates stay stable across daylight-saving boundaries.
+- Choose from an offline catalogue of 17 merchant entries and 57 selected products, or use scans, local OCR, pasted text and custom entry. Generated titles remain editable; original barcode payloads and symbology are preserved.
+- Search brands and products by aliases or Korean initial consonants, save device favourites and recent choices, and filter active · used · expired · expiring-soon coupons. Expiry reminders are configurable per device; calendar dates stay stable across daylight-saving boundaries.
 - Track payment-app events with conditions and original-provider links. Dynamic payment credentials remain in the provider's app.
 - Synchronise records through Firestore, recover deletions from trash and edits from version history, and export JSON · CSV · PDF. Validated JSON and CSV restores add missing coupons without overwriting existing records.
 
 The interface is in Korean. Each account only ever loads its own coupons.
+
+Browser captures below use local emulators and synthetic vouchers. The brand
+picker capture renders the real registration component in a layout harness.
+
+![Brand selection with bundled official-site identity assets](docs/images/brand-picker.png)
+![Wallet records created through the local emulator flow](docs/images/wallet.png)
 
 ## Architecture
 
@@ -85,10 +91,14 @@ wallet-sync/
 | Barcode rendering | bwip-js with React Native SVG, over a Code 128-only encoder | Preserve the scanned symbology and reject invalid payloads instead of silently changing them |
 | Recovery | Transactions, immutable history and additive restore, over permanent deletion and blind imports | Concurrent changes fail visibly; recovery retains current records and archived versions |
 | Image recognition | Bundled ML Kit on native, Tesseract in browsers, over hosted OCR | Recognition runs locally; browser workers and language models download on first use |
+| Brand selection | Reviewed bundled catalogue, over registration-time scraping | Works offline, records official sources and keeps saved voucher snapshots independent of menu changes |
 
 ## Results & Limitations
 
 Utility, service and component regression tests run with Jest. Local Firestore and Storage emulator tests exercise ownership, simultaneous saves, revision conflicts, reversible changes and immutable originals. Automated exports check web, iOS and Android JavaScript bundling. These checks do not establish physical-device OCR accuracy, barcode-reader compatibility or notification delivery.
+
+The latest local emulator run passed 205 tests across 25 suites, with no skipped
+tests. Browser checks used synthetic vouchers and local authentication/data services.
 
 - **Data isolation is defined in `firestore.rules`.** Queries filter by `userId`, and the repository contains version-controlled Firestore security rules enforcing document ownership boundaries.
 - **Real-time synchronisation.** Coupon additions, status updates and trash changes are received by active devices via Firestore snapshot listeners.
@@ -96,7 +106,8 @@ Utility, service and component regression tests run with Jest. Local Firestore a
 - **Expiry reminders run locally.** The default is 09:00 on D-7, D-3 and D-Day. Preferences are per device; web notifications are unsupported. iOS queues the nearest reminders within an app budget of 60 and replenishes them on foreground or data changes.
 - **Originals have a local fallback.** Failed cloud uploads retain the image on the registering device and are labelled accordingly. JSON with originals is the portable recovery path.
 - **Recovery has explicit boundaries.** File backups contain current coupon records, including trash, rather than historical versions, drafts or reminder preferences. See [Recovery and Data Handling](docs/recovery.md).
-- **Device verification remains pending.** No connected browser or physical device was available for the new UI flows. Real-world OCR accuracy and checkout scan success are unmeasured.
+- **Catalogue coverage is deliberately limited.** The 17 entries have 57 selected products, with custom entry for missing products. Fourteen official-site identity images are bundled; Olive Young and Coffee Bean use text tiles. There is no live price feed or issuer balance synchronisation. See [Brand Selection, Search and Favourites](docs/brand-catalogue.md).
+- **Browser and device verification have different boundaries.** Local-emulator browser checks cover registration, wallet search, favourites, recent choices and manual balance edits. The browser confirmation dialogue prevented automated history restoration; emulator tests cover that transaction. Physical-device OCR accuracy, checkout scans and native file sharing remain unmeasured.
 - **Existing dependency maintenance remains pending.** `npm audit` reports advisories in the existing Expo/React Native toolchain. Expo's compatibility check also flags the existing Expo patch and standalone Jest version; new feature dependencies do not add advisory entries in the baseline comparison.
 
 ## Getting Started
@@ -166,12 +177,14 @@ browser OCR downloads its worker and Korean/English models on first use.
 - [x] **Smart voucher parser & extractor**: Automatic parsing of brand, barcode PIN, and expiry date from voucher text/OCR.
 - [x] **Recovery and portable export**: Trash, edit history, device snapshots, JSON · CSV restore and PDF export.
 - [x] **Image and event records**: Original-image retention, local OCR and original-provider links.
+- [x] **Brand selection and discovery**: Offline brand/menu selection, monetary vouchers, aliases, Korean initial consonants, favourites and recent choices.
 - [ ] **Device acceptance checks**: Verify OCR, checkout scanning, notification delivery and native file sharing on physical devices.
 
 ## Status
 
-In progress. Personal project. Recovery and additional wallet features are implemented locally; production rule changes and physical-device acceptance checks remain pending. Last updated 2026-10-17.
+In progress. Personal project. Brand selection, search, favourites and recovery features are implemented; production rule changes and physical-device acceptance checks remain pending. Last updated 2026-10-17.
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+Source code: MIT. See [LICENSE](LICENSE). Third-party brand artwork retains its
+respective ownership; see the [brand asset notice](assets/brands/NOTICE.md).

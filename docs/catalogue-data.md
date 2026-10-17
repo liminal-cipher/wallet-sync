@@ -1,8 +1,9 @@
 # Catalogue Metadata and Backup Compatibility
 
 The data foundation supports catalogue selections without requiring a live
-catalogue or changing the registration interface. Brand selection, menu seeds,
-official icons and catalogue updates are separate work.
+catalogue. The [brand picker](brand-catalogue.md) now uses these records for
+offline brand/menu selection, search and favourites. Remote catalogue updates
+remain separate work.
 
 ## Saved Records
 
@@ -77,9 +78,9 @@ Keep the JSON `null` literal for records without metadata; an empty or malformed
 metadata cell fails validation. Renaming or adding columns also fails visibly.
 
 JSON with originals still embeds the original image. CSV contains no images.
-PDF remains a reading/printing view of the legacy display title, barcode, dates
-and conditions; it is not a structured backup and does not print catalogue
-metadata yet. Neither format introduces menu-derived barcode or expiry defaults.
+PDF includes the title, barcode, dates, conditions and saved catalogue details,
+including explicitly labelled manual balances. It is not a structured backup.
+Neither format introduces menu-derived barcode or expiry defaults.
 
 Export validates records before JSON serialisation can convert non-finite
 amounts into `null`, then validates the final portable file. Import validates the

@@ -48,7 +48,8 @@ schema, CSV column contract and mixed-client boundaries.
   the print dialogue; choose the browser's PDF destination.
 
 Portable backups contain current records, not historical versions, unsaved drafts,
-login credentials or reminder preferences. Exported files contain redeemable
+login credentials, brand favourites/recent choices or reminder preferences.
+Exported files contain redeemable
 barcode data and are not encrypted by this application. Store them privately.
 Changing accounts does not expose another account's device copies through the UI.
 Local copies are retained on sign-out so signing back in can recover them.

@@ -1,8 +1,10 @@
 # Brand and voucher catalogue plan
 
 Research date: 17 October 2026 (Asia/Seoul).
-Status: the [saved-record and backup foundation](catalogue-data.md) is implemented.
-The picker, menu catalogue and logo assets remain proposed work.
+Status: the [saved-record and backup foundation](catalogue-data.md) and
+[brand picker, search, favourites and expanded catalogue](brand-catalogue.md)
+are implemented. The design rationale and initial research below are retained;
+the implementation guide records the shipped scope and sources.
 
 ## Recommended experience
 
@@ -121,10 +123,11 @@ separate from its corporate CI; use the retail identity in a consumer picker.
 For every asset, record the official page URL, asset URL, retrieval date, file
 hash, identity variant and applicable usage terms or authorisation evidence.
 An official website hosting an image does not, by itself, establish permission
-to redistribute it. This survey did not establish a redistribution basis for
-all requested logos. Keep that status explicit rather than assigning a blanket
-licence. Do not recreate logos or substitute third-party images labelled as
-official. Preserve aspect ratios using `contain` inside a consistent tile.
+to redistribute it. The survey did not establish a blanket redistribution
+licence. The shipped identity assets retain their original form, provenance and
+ownership notice and are separate from the source-code licence. Do not recreate
+logos or substitute third-party images labelled as official. Preserve aspect
+ratios using `contain` inside a consistent tile.
 
 When an asset's intended use is established, bundle an optimised local copy so
 the picker works offline and does not depend on third-party hotlinks. Until
@@ -174,8 +177,8 @@ using this contract throughout saving and recovery.
 
 Model validation, Firestore save/edit and immutable history, existing editor
 drafts, local snapshots and JSON/CSV export/import now preserve the metadata.
-Search, card presentation and printable catalogue details remain part of the
-future interface work. The new backup formats import existing version 1 JSON
+Search, card presentation and printable catalogue details now use saved
+metadata. The new backup formats import existing version 1 JSON
 and the old CSV header and reject unsupported future versions visibly. Raw
 barcodes, original images, usage state and expiry dates remain independent of
 catalogue selections.
@@ -195,12 +198,12 @@ or minimum-version policy before relying on the new fields for recovery.
 ## Delivery order and acceptance checks
 
 1. The saved-record model and backwards-compatible recovery formats are
-   implemented. Public catalogue entries, aliases and asset/source records
-   still need validation before the picker ships.
-2. Add the eight-brand picker, product or amount selection, generated titles,
-   direct entry, and OCR suggestions. Show metadata consistently in the wallet.
-3. Add recent selections, favourites and broader search; expand to the verified
-   candidate brands after validating their seed products and instruments.
+   implemented. The bundled public catalogue, aliases and asset provenance are
+   validated before use.
+2. Brand, product or amount selection, generated titles, custom entry and OCR
+   suggestions are implemented. Wallet cards and history show saved metadata.
+3. Recent choices, favourites and broader search are implemented, covering 17
+   separate merchant entries and 57 selected products.
 4. Add reviewed seasonal entries, richer sets and remote updates only when
    their maintenance cost is justified. Custom names cover uncommon sets early.
 
