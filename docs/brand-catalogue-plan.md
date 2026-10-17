@@ -170,8 +170,8 @@ of being presented as current. Retire entries without reusing their IDs.
 ## Integration and recovery requirements
 
 The form stores combined names in `brand`. The data foundation now preserves
-optional versioned catalogue metadata separately, exports version 2 JSON/CSV and
-imports the original version 1 formats. See the linked contract for implemented
+optional versioned catalogue metadata separately, exports JSON v3 and CSV v2 and
+imports JSON v1/v2 and the original CSV format. See the linked contract for implemented
 validation and mixed-client boundaries. Adding future picker fields requires
 using this contract throughout saving and recovery.
 
@@ -203,7 +203,7 @@ or minimum-version policy before relying on the new fields for recovery.
 2. Brand, product or amount selection, generated titles, custom entry and OCR
    suggestions are implemented. Wallet cards and history show saved metadata.
 3. Recent choices, favourites and broader search are implemented, covering 17
-   separate merchant entries and 57 selected products.
+   separate merchant entries and 61 selected products.
 4. Add reviewed seasonal entries, richer sets and remote updates only when
    their maintenance cost is justified. Custom names cover uncommon sets early.
 

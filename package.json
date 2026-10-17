@@ -8,6 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest",
+    "check:catalogue": "jest --runInBand tests/brandCatalogue.test.js",
     "test:rules": "npx --yes --package=firebase-tools@15.34.0 -- firebase emulators:exec --only firestore,storage --project demo-wallet-sync-rules --config firebase.emulator.json \"jest --runInBand tests/firestore.rules.test.js tests/storage.rules.test.js\"",
     "test:integration": "npx --yes --package=firebase-tools@15.34.0 -- firebase emulators:exec --only firestore,storage --project demo-wallet-sync-rules --config firebase.emulator.json \"jest --runInBand\""
   },

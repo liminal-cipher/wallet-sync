@@ -15,7 +15,7 @@ WalletSync treats a coupon as a record instead of a photo: it has a brand, a bar
 ## What It Does
 
 - Register, sign in and request password recovery; sessions persist across relaunches.
-- Choose from an offline catalogue of 17 merchant entries and 57 selected products, or use scans, local OCR, pasted text and custom entry. Generated titles remain editable; original barcode payloads and symbology are preserved.
+- Choose from an offline catalogue of 17 merchant entries and 61 selected products, or use scans, local OCR, pasted text and custom entry. Generated titles remain editable; original barcode payloads and symbology are preserved.
 - Search brands and products by aliases or Korean initial consonants, save device favourites and recent choices, and filter active · used · expired · expiring-soon coupons. Expiry reminders are configurable per device; calendar dates stay stable across daylight-saving boundaries.
 - Track payment-app events with conditions and original-provider links. Dynamic payment credentials remain in the provider's app.
 - Synchronise records through Firestore, recover deletions from trash and edits from version history, and export JSON · CSV · PDF. Validated JSON and CSV restores add missing coupons without overwriting existing records.
@@ -97,7 +97,7 @@ wallet-sync/
 
 Utility, service and component regression tests run with Jest. Local Firestore and Storage emulator tests exercise ownership, simultaneous saves, revision conflicts, reversible changes and immutable originals. Automated exports check web, iOS and Android JavaScript bundling. These checks do not establish physical-device OCR accuracy, barcode-reader compatibility or notification delivery.
 
-The latest local emulator run passed 224 tests across 27 suites, with no skipped
+The latest local emulator run passed 226 tests across 27 suites, with no skipped
 tests. Browser checks used synthetic vouchers and local authentication/data services.
 
 - **Data isolation is defined in `firestore.rules`.** Queries filter by `userId`, and the repository contains version-controlled Firestore security rules enforcing document ownership boundaries.
@@ -106,7 +106,7 @@ tests. Browser checks used synthetic vouchers and local authentication/data serv
 - **Expiry reminders run locally.** The default is 09:00 on D-7, D-3 and D-Day. Preferences are per device; web notifications are unsupported. iOS queues the nearest reminders within an app budget of 60 and replenishes them on foreground or data changes.
 - **Originals have a local fallback.** Failed cloud uploads retain the image on the registering device and are labelled accordingly. JSON with originals is the portable recovery path.
 - **Recovery has explicit boundaries.** JSON v3 backups contain current coupons, trash and optional brand favourites/recent choices. They do not contain historical versions, drafts or reminder preferences. Settings restore only by explicit choice, with a pre-restore copy retained. JSON v1/v2 and CSV imports remain supported. See [Recovery and Data Handling](docs/recovery.md).
-- **Catalogue coverage is deliberately limited.** The 17 entries have 57 selected products, with custom entry for missing products. Fourteen official-site identity images are bundled; Olive Young and Coffee Bean use text tiles. There is no live price feed or issuer balance synchronisation. See [Brand Selection, Search and Favourites](docs/brand-catalogue.md).
+- **Catalogue coverage is deliberately limited.** The 17 entries have 61 selected products, with custom entry for missing products. Fourteen official-site identity images are bundled; Olive Young and Coffee Bean use text tiles. There is no live price feed or issuer balance synchronisation. See [Brand Selection, Search and Favourites](docs/brand-catalogue.md).
 - **Browser and device verification have different boundaries.** Earlier local-emulator browser checks cover registration, wallet search, favourites, recent choices and manual balance edits. New preference consent and in-app history confirmations have component coverage; current Windows browser automation was unavailable because URL-policy enforcement was unsupported. Physical-device OCR accuracy, checkout scans and native file sharing remain unmeasured.
 - **Dependency maintenance retains explicit limits.** Expo SDK 55 and Jest compatibility checks pass after an incremental upgrade. The audit reports zero Critical entries, with 52 affected package entries originating in four remaining advisories. Expo Doctor passes 19 of 20 checks and still flags the OCR library as untested on the New Architecture. See [Dependency Maintenance](docs/dependency-maintenance.md) for the update scope, remaining advisory paths and verification commands.
 

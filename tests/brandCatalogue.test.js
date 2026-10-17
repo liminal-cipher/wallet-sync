@@ -98,3 +98,24 @@ test("bundled identity assets match their official provenance hashes without mod
     expect(createHash("sha256").update(fs.readFileSync(path.join(__dirname, "..", item.file))).digest("hex")).toBe(item.sha256);
   }
 });
+test("every icon reference resolves to a unique confined asset with dated HTTPS provenance", () => {
+  const sources = require("../assets/brands/sources.json");
+  const icons = new Set(sources.map((item) => item.id));
+  expect(icons.size).toBe(sources.length);
+  expect(catalogue.version).toMatch(/^\d{4}-\d{2}-\d{2}\.\d+$/);
+  const releaseDate = catalogue.version.slice(0, 10);
+  for (const item of sources) {
+    expect(item.file).toMatch(/^assets\/brands\/[a-z0-9-]+\.(png|gif)$/);
+    expect(item.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(item.checkedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(item.checkedOn <= releaseDate).toBe(true);
+    for (const value of [item.sourcePage, item.assetUrl]) {
+      const url = new URL(value);
+      expect(url.protocol).toBe("https:"); expect(url.username + url.password).toBe("");
+    }
+  }
+  for (const brand of catalogue.brands) {
+    if (brand.iconId) expect(icons.has(brand.iconId)).toBe(true);
+    expect(brand.source.checkedOn <= releaseDate).toBe(true);
+  }
+});

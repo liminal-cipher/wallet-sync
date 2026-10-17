@@ -29,7 +29,9 @@ const brands = [
   brand("hollys", "할리스", ["할리스커피", "할리스 커피", "Hollys"], "cafe", "https://www.hollys.co.kr/menu/espresso.do", [
     ["vanilla-delight", "바닐라 딜라이트"], ["cappuccino", "카푸치노"], ["cold-brew", "콜드브루", ["콜드 브루"]],
     ["dolce-latte", "돌체 라떼"], ["caramel-macchiato", "카라멜 마키아또"],
-  ]),
+    ["americano", "아메리카노", ["Caffe Americano"]], ["latte", "카페 라떼", ["카페라떼", "Caffe Latte"]],
+    ["mocha", "카페 모카", ["카페모카", "Caffe Mocha"]], ["espresso", "에스프레소", ["Espresso"]],
+  ], { source: { url: "https://www.hollys.co.kr/menu/espresso.do", checkedOn: "2026-10-18" } }),
   brand("mammoth-coffee", "매머드커피", ["매머드", "매머드 커피", "Mammoth Coffee"], "cafe", "https://www.mmthcoffee.com/sub/menu/list_coffee.php", [
     ["mammoth-coffee", "매머드 커피"], ["snow-mammoth", "스노우 매머드 커피"], ["americano", "아메리카노"],
     ["latte", "카페 라떼"], ["signature-latte", "시그니처 라떼"],
@@ -68,4 +70,4 @@ const brands = [
     ["strawberry-filled", "스트로베리 필드"], ["bavarian-filled", "바바리안필드"], ["boston-cream", "보스톤 크림"],
   ]),
 ];
-module.exports = { schemaVersion: 1, version: "2026-10-17.1", brands };
+module.exports = { schemaVersion: 1, version: "2026-10-18.1", brands };

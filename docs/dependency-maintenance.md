@@ -30,7 +30,7 @@ absent from the SDK 55 lockfile.
 The four remaining advisories originate in braces, node-forge, sprintf-js and
 uuid, described in the initial audit below. The audit remains enabled and exits
 with code 1. Clean installation, the complete dependency tree, SDK version
-compatibility, configuration/plugin introspection, 224 emulator tests and all
+compatibility, configuration/plugin introspection, 226 emulator tests and all
 three platform JavaScript exports passed. Expo Doctor passed 19 of 20 checks;
 the existing OCR New Architecture metadata warning remains visible.
 
@@ -104,7 +104,7 @@ SDK versions incrementally.
 ## Reproducing the Checks
 
 The current verification passed a clean `npm ci`, the complete dependency
-tree check, Expo's version compatibility check, all 224 tests across 27 suites
+tree check, Expo's version compatibility check, all 226 tests across 27 suites
 with local Firestore/Storage emulators, and web/iOS/Android JavaScript exports.
 No tests were skipped. Expo Doctor passed 19 of 20 checks, with the OCR metadata
 warning described below remaining unresolved.

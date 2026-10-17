@@ -1,7 +1,7 @@
 # Brand Selection, Search and Favourites
 
-The bundled catalogue contains 17 separate merchant entries and 57 selected
-products, reviewed on 17 October 2026. It works offline without registration-time
+The bundled catalogue contains 17 separate merchant entries and 61 selected
+products, reviewed on 17 and 18 October 2026. It works offline without registration-time
 catalogue requests. These are descriptive menu entries, not an inventory of
 issued or currently purchasable vouchers.
 
@@ -53,6 +53,13 @@ saved JSON backup to recover them. Importing preferences is an explicit,
 additive choice; see [Recovery and Data Handling](recovery.md).
 
 ## Sources and Maintenance
+
+The 18 October update adds Hollys Americano, Caffe Latte, Caffe Mocha and Espresso
+from its [official coffee menu](https://www.hollys.co.kr/menu/espresso.do).
+It adds no inferred prices, sizes, expiry dates or redemption guarantees.
+`npm run check:catalogue` validates the catalogue contract, search behaviour,
+unique identity-asset provenance, icon references and bundled asset hashes.
+The check is offline; it does not establish current menu availability or licensing.
 
 Source URLs, review dates, stable IDs and aliases live in the reviewed
 [`src/data/brandCatalogue.js`](../src/data/brandCatalogue.js). Coverage includes the
