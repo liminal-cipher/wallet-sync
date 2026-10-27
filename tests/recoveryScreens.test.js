@@ -6,6 +6,7 @@ jest.mock("react-native", () => {
     StyleSheet: { create: (value) => value }, Platform: { OS: "web" } };
 });
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: "SafeAreaView" }));
+jest.mock("../src/hooks/useCalendarClock", () => () => new Date(2026, 9, 27, 12));
 jest.mock("@react-navigation/native", () => ({ useFocusEffect: (effect) => require("react").useEffect(effect, [effect]) }));
 jest.mock("../src/services/firebase", () => ({ auth: { currentUser: { uid: "owner" } } }));
 jest.mock("../src/services/firestoreService", () => ({ fetchCoupons: jest.fn(), restoreCoupon: jest.fn(), fetchCouponHistory: jest.fn(), getCoupon: jest.fn(), restoreCouponVersion: jest.fn() }));
@@ -85,4 +86,15 @@ test("confirmation requests cannot overlap and unmounting cancels the pending re
   await expect(confirmation.confirm("Other", "Other")).resolves.toBe(false);
   await act(async () => renderer.unmount()); renderer = null;
   await expect(pending).resolves.toBe(false);
+});
+
+test("reminder forecast is visible and uses saved settings rather than unsaved fields", async () => {
+  server.fetchCoupons.mockResolvedValue([{ id: "one", userId: "owner", brand: "Forecast coffee", expiryDay: "2026-11-03" }]);
+  await mount(React.createElement(Tools, { navigation: { goBack() {} } }));
+  await act(async () => button("알림").props.onPress());
+  const forecast = () => renderer.root.findAllByType("Text").filter((node) => node.children.join("").includes("Forecast coffee")).map((node) => node.children.join(""));
+  expect(forecast()).toHaveLength(2);
+  const previous = forecast();
+  await act(async () => renderer.root.findAllByType("TextInput").find((node) => node.props.accessibilityLabel === "이 기기의 알림 시간 (HH:MM)").props.onChangeText("23:59"));
+  expect(forecast()).toEqual(previous);
 });

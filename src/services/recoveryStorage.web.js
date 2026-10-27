@@ -1,9 +1,5 @@
-const database = () => new Promise((resolve, reject) => {
-  const request = indexedDB.open("wallet-sync-recovery", 1);
-  request.onupgradeneeded = () => request.result.createObjectStore("records");
-  request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(new Error("기기 복구 저장소를 열 수 없습니다."));
-});
+import { openLocalDatabase } from "./localDatabase";
+const database = () => openLocalDatabase("wallet-sync-recovery", "records");
 async function access(key, value) {
   const db = await database();
   try {

@@ -29,7 +29,8 @@ import { readLocal } from "../../services/localRecovery";
 import { imageDataUri } from "../../services/imageService";
 import { openOriginalProvider } from "../../services/providerLinks";
 import { Alert } from "../../utils/feedback";
-import { Button, ui } from "../../components/WalletUi";
+import { Button, Choices, ui } from "../../components/WalletUi";
+import { sortWalletCoupons, walletOverview } from "../../utils/walletOverview";
 import BrandIcon from "../../components/BrandIcon";
 import CatalogueDetails from "../../components/CatalogueDetails";
 import { findBrand } from "../../utils/brandCatalogue";
@@ -43,10 +44,14 @@ export default function HomeScreen() {
   const [selectedBarcodeId, setSelectedBarcodeId] = useState(null);
   const selectedBarcodeCoupon = coupons.find((coupon) => coupon.id === selectedBarcodeId && !coupon.deletedAt) || null;
   const [search, setSearch] = useState("");
+  const [order, setOrder] = useState("expiry");
   const [cacheNotice, setCacheNotice] = useState("");
   const [original, setOriginal] = useState(null);
   const [pending, setPending] = useState([]);
   const locks = useRef(new Set());
+  const lifecycle = useRef(0);
+  const dataVersion = useRef(0);
+  const refreshLock = useRef(false);
   const now = useCalendarClock();
 
   const navigation = useNavigation();
@@ -58,9 +63,11 @@ export default function HomeScreen() {
       setFetchError(false);
 
       const userId = auth.currentUser?.uid;
+      const generation = ++lifecycle.current;
+      const initialVersion = dataVersion.current;
       let active = true, received = false;
       readLocal(userId, "snapshots", []).then((copies) => {
-        if (active && !received && copies[0]) {
+        if (active && !received && dataVersion.current === initialVersion && copies[0]) {
           setCoupons(copies[0].records); setLoading(false);
           setCacheNotice("기기 내 사본을 표시 중입니다. 서버 연결 후 최신 상태로 갱신됩니다.");
         }
@@ -73,7 +80,9 @@ export default function HomeScreen() {
             setLoading(false); setCacheNotice("서버 연결을 기다리는 중입니다. 보관된 기기 사본을 확인합니다."); return;
           }
           received = true;
+          dataVersion.current++;
           setCoupons(data);
+          setFetchError(false);
           setCacheNotice(metadata?.fromCache ? "오프라인 사본입니다. 변경하려면 서버 연결이 필요합니다." : "");
           setLoading(false);
           setRefreshing(false);
@@ -82,7 +91,7 @@ export default function HomeScreen() {
           if (!active) return;
           if (details?.localRecovery) { setCacheNotice("기기 자동 사본을 저장하지 못했습니다. 파일 백업을 권장합니다."); return; }
           console.error("Subscription error:", error);
-          setFetchError(true);
+          setFetchError(error.message || "목록을 불러오지 못했습니다.");
           setLoading(false);
           setRefreshing(false);
         }
@@ -90,6 +99,7 @@ export default function HomeScreen() {
 
       return () => {
         active = false;
+        if (lifecycle.current === generation) lifecycle.current++;
         if (typeof unsubscribe === "function") {
           unsubscribe();
         }
@@ -98,17 +108,23 @@ export default function HomeScreen() {
   );
 
   const handleRefresh = async () => {
+    if (refreshLock.current) return;
+    refreshLock.current = true;
+    const generation = lifecycle.current, version = dataVersion.current;
     try {
       setRefreshing(true);
       setFetchError(false);
       const data = await fetchCoupons(auth.currentUser?.uid);
+      if (lifecycle.current !== generation || dataVersion.current !== version) return;
+      dataVersion.current++;
       setCoupons(data);
       setCacheNotice("");
     } catch (error) {
       console.error("Refresh error:", error);
-      setFetchError(true);
+      if (lifecycle.current === generation && dataVersion.current === version) setFetchError(error.message || "새로고침에 실패했습니다.");
     } finally {
-      setRefreshing(false);
+      refreshLock.current = false;
+      if (lifecycle.current === generation) setRefreshing(false);
     }
   };
 
@@ -116,7 +132,7 @@ export default function HomeScreen() {
     try {
       await logoutUser();
     } catch (error) {
-      console.log("Logout error:", error);
+      Alert.alert("로그아웃 실패", error.message);
     }
   };
 
@@ -169,7 +185,8 @@ export default function HomeScreen() {
     });
   };
 
-  const filteredCoupons = filterCoupons(coupons, filter, search, now);
+  const filteredCoupons = sortWalletCoupons(filterCoupons(coupons, filter, search, now), order);
+  const summary = walletOverview(coupons, now);
   const showOriginal = async (coupon) => {
     try { setOriginal(await imageDataUri(coupon.image)); }
     catch (error) { Alert.alert("원본 불러오기 실패", error.message); }
@@ -293,9 +310,14 @@ export default function HomeScreen() {
       <View style={ui.row}>
         <Button label="보관·복원·알림" secondary onPress={() => navigation.navigate("WalletTools")} />
         {!!cacheNotice && <Text style={ui.note}>{cacheNotice}</Text>}
-        {fetchError && <Text style={ui.error}>연결이 끊겼습니다. 표시된 사본을 유지합니다.</Text>}
+        {!!fetchError && <Text accessibilityRole="alert" style={ui.error}>목록 갱신 실패: {fetchError} 표시된 사본을 유지합니다.</Text>}
       </View>
-      <TextInput accessibilityLabel="브랜드·상품명 검색" placeholder="브랜드·상품명 검색" value={search} onChangeText={setSearch} style={[ui.input, { marginTop: 12 }]} />
+      <Text style={ui.note}>사용 가능 {summary.active}개 · 오늘 만료 {summary.today}개 · 7일 내 만료 {summary.soon}개</Text>
+      {!!(summary.knownBalances + summary.unknownBalances) && <Text style={ui.note}>
+        기록한 금액권 잔액 {summary.balance === null ? "합계 표시 범위 초과" : `${summary.balance.toLocaleString("ko-KR")}원`} · 잔액 미입력 {summary.unknownBalances}개 (사용 가능한 금액권 기준·수동 기록)
+      </Text>}
+      <TextInput accessibilityLabel="쿠폰 검색" placeholder="브랜드·상품·바코드·이용 조건 검색" value={search} onChangeText={setSearch} style={[ui.input, { marginTop: 12 }]} />
+      <Choices options={[["expiry", "만료일순"], ["newest", "최근 등록순"], ["title", "이름순"]]} value={order} onChange={setOrder} />
       <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={styles.tabContainer}>
         {[
           { key: "active", label: "사용 가능" },
@@ -354,9 +376,9 @@ export default function HomeScreen() {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyTitle}>쿠폰이 없습니다</Text>
+              <Text style={styles.emptyTitle}>{search.trim() ? "검색 결과가 없습니다" : "쿠폰이 없습니다"}</Text>
               <Text style={styles.emptySubtitle}>
-                {filter === "active"
+                {search.trim() ? "다른 검색어나 상태 필터로 다시 찾아보세요." : filter === "active"
                   ? "사용 가능한 쿠폰이 없습니다.\n상단의 '+ 쿠폰 등록' 버튼을 눌러보세요."
                   : "해당 상태의 쿠폰 내역이 없습니다."}
               </Text>
@@ -479,7 +501,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   tabButton: {
-    flex: 1,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     alignItems: "center",
     borderRadius: 10,

@@ -39,6 +39,15 @@ beforeEach(() => {
   images.uploadOriginal.mockResolvedValue({ image: null, localOnly: false });
 });
 afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); renderer = null; });
+
+test("a malformed draft is preserved and cannot be applied to crash the editor", async () => {
+  localValues.set("draft:new", { form: null, revision: 0 });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  expect(button("입력 초안 복원")).toBeUndefined();
+  expect(button("등록하기").props.disabled).toBe(true);
+  expect(localValues.get("draft:new")).toEqual({ form: null, revision: 0 });
+  expect(local.writeLocal).not.toHaveBeenCalled();
+});
 test("rapid save taps submit once, and a network failure leaves the draft and input intact", async () => {
   let rejectSave;
   firestore.addCoupon.mockReturnValue(new Promise((_resolve, reject) => { rejectSave = reject; }));

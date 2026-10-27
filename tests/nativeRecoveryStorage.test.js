@@ -29,3 +29,15 @@ test("a failed pointer commit keeps the previous file readable and allows a late
   await storage.setItem("checkpoint", "retried");
   expect(await storage.getItem("checkpoint")).toBe("retried");
 });
+
+test("a truncated write cannot advance the active pointer", async () => {
+  await storage.setItem("checkpoint", "previous");
+  files.readAsStringAsync.mockResolvedValueOnce("truncated");
+  await expect(storage.setItem("checkpoint", "complete")).rejects.toThrow("이전 사본");
+  expect(await storage.getItem("checkpoint")).toBe("previous");
+});
+test("an unknown pointer cannot overwrite either recovery slot", async () => {
+  pointers.getItem.mockResolvedValue("future-version");
+  await expect(storage.setItem("checkpoint", "next")).rejects.toThrow("기존 파일");
+  expect(files.writeAsStringAsync).not.toHaveBeenCalled();
+});

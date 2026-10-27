@@ -1,7 +1,7 @@
 export function safeSourceUrl(value) {
   if (!value) return "";
   try {
-    if (typeof value !== "string") throw new Error();
+    if (typeof value !== "string" || value.length > 2048) throw new Error();
     const text = value.trim().replace(/^https:/i, "https:");
     if (!/^https:\/\/[^/?#\s\\@]+(?:[/?#][^\s\\]*)?$/.test(text)) throw new Error();
     const url = new URL(text);

@@ -1,6 +1,6 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { toDate } from "../utils/dateUtils";
+import { reminderSchedule } from "../utils/reminderSchedule";
 import { DEFAULT_REMINDERS } from "./reminderSettings";
 
 // Configure foreground notification presentation
@@ -59,44 +59,16 @@ const isCouponNotification = (notification) => {
   return data?.type === NOTIFICATION_TYPE || typeof data?.couponId === "string";
 };
 
-const createExpiryRequests = (userId, coupon, now, settings) => {
-  if (!settings.enabled || !coupon.id || coupon.userId !== userId || coupon.isUsed || coupon.deletedAt || !(coupon.expiryDay || coupon.expiryDate)) {
-    return [];
-  }
-  const expDate = toDate(coupon.expiryDay || coupon.expiryDate);
-  if (!expDate) return [];
-
-  const targets = settings.days.map((daysBefore) => ({ daysBefore,
-    title: daysBefore ? `쿠폰 만료 ${daysBefore}일 전` : "쿠폰 만료 D-Day",
-    body: `'${coupon.brand}' ${daysBefore ? `만료까지 ${daysBefore}일 남았습니다.` : "오늘 만료됩니다."}`,
+const createExpiryRequests = (userId, coupons, now, settings) =>
+  reminderSchedule(userId, coupons, settings, now).map(({ couponId, brand, daysBefore, date }) => ({
+    identifier: `${NOTIFICATION_TYPE}:${userId}:${couponId}:${daysBefore}`,
+    content: {
+      title: daysBefore ? `쿠폰 만료 ${daysBefore}일 전` : "쿠폰 만료 D-Day",
+      body: `'${brand}' ${daysBefore ? `만료까지 ${daysBefore}일 남았습니다.` : "오늘 만료됩니다."}`,
+      data: { type: NOTIFICATION_TYPE, userId, couponId, scheduleKey: JSON.stringify([brand, date.getTime()]) },
+    },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date, channelId: NOTIFICATION_TYPE },
   }));
-
-  return targets.flatMap((target) => {
-    const triggerDate = new Date(expDate);
-    triggerDate.setDate(triggerDate.getDate() - target.daysBefore);
-    triggerDate.setHours(settings.hour, settings.minute, 0, 0);
-
-    if (triggerDate.getTime() <= now.getTime()) return [];
-    return [{
-      identifier: `${NOTIFICATION_TYPE}:${userId}:${coupon.id}:${target.daysBefore}`,
-      content: {
-        title: target.title,
-        body: target.body,
-        data: {
-          type: NOTIFICATION_TYPE,
-          userId,
-          couponId: coupon.id,
-          scheduleKey: JSON.stringify([coupon.brand, triggerDate.getTime()]),
-        },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: triggerDate,
-        channelId: NOTIFICATION_TYPE,
-      },
-    }];
-  });
-};
 
 // Keep this account's reminders during startup, even before an offline snapshot arrives.
 // With no account to keep, remove every coupon reminder on sign-out.
@@ -119,7 +91,7 @@ export const reconcileCouponNotifications = (userId, coupons, settings = DEFAULT
     const { status } = await Notifications.getPermissionsAsync();
     const now = new Date();
     let requests = status === "granted"
-      ? coupons.flatMap((coupon) => createExpiryRequests(userId, coupon, now, settings))
+      ? createExpiryRequests(userId, coupons, now, settings)
       : [];
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     // Reserve space for other notification categories and schedule the nearest

@@ -1,5 +1,5 @@
 jest.mock("react-native", () => ({ Platform: { OS: "web" } }));
-jest.mock("expo-file-system/legacy", () => ({}));
+jest.mock("expo-file-system/legacy", () => ({ documentDirectory: "file://documents/", writeAsStringAsync: jest.fn() }));
 jest.mock("expo-sharing", () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock("expo-document-picker", () => ({}));
 jest.mock("expo-print", () => ({ printToFileAsync: jest.fn() }));
@@ -24,6 +24,20 @@ test("storage failure before checkpoint prevents any restore writes", async () =
   local.writeLocal.mockRejectedValueOnce(new Error("Storage full"));
   await expect(restoreRecords([record("one")])).rejects.toThrow("Storage full");
   expect(firestore.addCoupon).not.toHaveBeenCalled();
+});
+
+test("native exports cannot open a share sheet after the account changes during file writing", async () => {
+  const { Platform } = require("react-native");
+  const files = require("expo-file-system/legacy");
+  const sharing = require("expo-sharing");
+  const { auth } = require("../src/services/firebase");
+  Platform.OS = "ios";
+  files.writeAsStringAsync.mockImplementationOnce(async () => { auth.currentUser = { uid: "other" }; });
+  sharing.isAvailableAsync.mockResolvedValue(true);
+  try {
+    await expect(exportWallet("json", false, [record("one")], null, false)).rejects.toThrow("계정");
+    expect(sharing.shareAsync).not.toHaveBeenCalled();
+  } finally { Platform.OS = "web"; auth.currentUser = { uid: "owner" }; }
 });
 test("a network interruption retains the input checkpoint and can resume without overwriting restored records", async () => {
   firestore.addCoupon.mockResolvedValueOnce({ id: "one" }).mockRejectedValueOnce(new Error("Offline"));

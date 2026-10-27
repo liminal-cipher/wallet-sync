@@ -1,22 +1,24 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   StatusBar,
 } from "react-native";
 import { signUpUser, getAuthErrorMessage } from "../../services/authService";
+import { Alert } from "../../utils/feedback";
 
 export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
 
   const handleSignUp = async () => {
+    if (pending.current) return;
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
       Alert.alert("입력 오류", "이메일과 비밀번호를 모두 입력해 주세요.");
@@ -34,12 +36,14 @@ export default function RegisterScreen({ navigation }) {
     }
 
     try {
+      pending.current = true;
       setLoading(true);
       await signUpUser(trimmedEmail, password);
     } catch (error) {
       const message = getAuthErrorMessage(error);
       Alert.alert("회원가입 실패", message);
     } finally {
+      pending.current = false;
       setLoading(false);
     }
   };

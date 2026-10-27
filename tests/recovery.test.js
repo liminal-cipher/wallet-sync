@@ -57,6 +57,12 @@ test("corrupt local storage is not silently replaced", async () => {
   await expect(captureSnapshot("corrupt", [coupon()])).rejects.toThrow("기존 파일");
   expect(storage.setItem).not.toHaveBeenCalled();
 });
+
+test.each(["null", "{}", '[{"savedAt":"2026-10-27","records":null}]'])("valid JSON with an invalid snapshot shape is preserved: %s", async (text) => {
+  storage.getItem.mockResolvedValueOnce(text);
+  await expect(captureSnapshot("broken-shape", [coupon()])).rejects.toThrow("기존 파일");
+  expect(storage.setItem).not.toHaveBeenCalled();
+});
 test("drafts preserve Unicode and barcode punctuation per account", async () => {
   await writeLocal("one", "draft:new", { barcodeNumber: "안녕-12 34" });
   expect(await readLocal("one", "draft:new")).toEqual({ barcodeNumber: "안녕-12 34" });

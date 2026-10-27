@@ -44,8 +44,10 @@ export const startCouponNotificationSync = () => {
     latestCoupons = null;
     clearCouponNotifications(userId).catch(reportError);
     if (userId) {
-      stopCoupons = subscribeCoupons(userId, (coupons) => {
+      stopCoupons = subscribeCoupons(userId, (coupons, metadata) => {
         if (disposed || currentGeneration !== generation) return;
+        // A cold-start cache miss is not evidence that the wallet was emptied.
+        if (metadata?.hasPendingWrites || (metadata?.fromCache && !coupons.length)) return;
         latestCoupons = coupons;
         refresh().catch(reportError);
       }, reportError);

@@ -56,6 +56,14 @@ beforeEach(() => {
 
 afterEach(() => { if (stop) stop(); stop = null; });
 
+test("an unconfirmed empty cache cannot cancel previously scheduled reminders", async () => {
+  stop = startCouponNotificationSync(); authChanged({ uid: "owner" });
+  subscriptions[0].callback([], { fromCache: true }); await flush();
+  expect(notifications.reconcileCouponNotifications).not.toHaveBeenCalled();
+  subscriptions[0].callback([], { fromCache: false }); await flush();
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("owner", [], expect.anything());
+});
+
 test("snapshots reconcile reminders independently of the current screen", async () => {
   stop = startCouponNotificationSync();
   authChanged({ uid: "owner" });

@@ -2,6 +2,7 @@ import { normaliseCoupon, couponIdentity, validateImage } from "./couponModel";
 import { normaliseCatalogueMetadata } from "./catalogueModel";
 import { toDate } from "./dateUtils";
 import { validateBrandPreferences } from "./brandPreferenceData";
+import { MAX_BACKUP_BYTES, utf8ByteLength, originalByteLength } from "./inputLimits";
 
 export const BACKUP_VERSION = 3;
 export const LEGACY_CSV_FIELDS = ["kind", "brand", "barcodeType", "barcodeNumber", "expiryDay", "isUsed", "provider", "conditions", "sourceUrl", "deletedAt"];
@@ -63,9 +64,7 @@ export function validateBackupRecords(records, { localImages = false } = {}) {
       }
       const original = record.original || null;
       if (original) {
-        if (typeof original !== "string" || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(original)) throw new Error("이미지 형식이 올바르지 않습니다.");
-        const bytes = original.split(",")[1].length * 0.75;
-        if (bytes > 10 * 1024 * 1024 + 2) throw new Error("이미지는 10MB 이하여야 합니다.");
+        const bytes = originalByteLength(original);
         imageBytes += bytes;
       }
       if (imageBytes > 35 * 1024 * 1024) throw new Error("한 백업의 이미지 합계는 35MB 이하여야 합니다.");
@@ -91,7 +90,8 @@ export function validateRestoreSession(session) {
 }
 export function parseWalletBackup(text, format) {
   if (typeof text !== "string") throw new Error("백업 내용을 읽지 못했습니다.");
-  if (text.length > 50 * 1024 * 1024) throw new Error("50MB 이하 백업을 선택해 주세요.");
+  if (text.length > MAX_BACKUP_BYTES || utf8ByteLength(text, MAX_BACKUP_BYTES) > MAX_BACKUP_BYTES) throw new Error("50MB 이하 백업을 선택해 주세요.");
+  if (!["json", "csv"].includes(format)) throw new Error("JSON 또는 CSV 백업을 선택해 주세요.");
   if (format === "csv") return validateRestoreInput(parseCsv(text));
   let backup;
   try { backup = JSON.parse(text.replace(/^\ufeff/, "")); } catch { throw new Error("JSON 백업을 읽을 수 없습니다."); }

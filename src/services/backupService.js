@@ -14,10 +14,12 @@ import { BACKUP_VERSION, toCsv, parseBackup, parseWalletBackup, planRestore, val
 import { barcodeSvg } from "../utils/barcodes";
 import { selectBackupRange } from "../utils/backupRange";
 import { catalogueDetailLines } from "../utils/catalogueDisplay";
+import { originalByteLength } from "../utils/inputLimits";
 
 const assertAccount = (uid) => { if (!uid || auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다. 다시 시도해 주세요."); };
 const restoring = new Set();
-async function shareText(text, extension, mimeType) {
+async function shareText(text, extension, mimeType, uid) {
+  assertAccount(uid);
   const name = `wallet-sync-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
   if (Platform.OS === "web") {
     const url = URL.createObjectURL(new Blob([text], { type: mimeType }));
@@ -29,10 +31,13 @@ async function shareText(text, extension, mimeType) {
   // Keep the export in documents even when the share sheet is cancelled.
   const uri = `${FileSystem.documentDirectory}${name}`;
   await FileSystem.writeAsStringAsync(uri, text);
+  assertAccount(uid);
   if (!(await Sharing.isAvailableAsync())) throw new Error(`파일은 앱 문서에 보관됐지만 공유를 지원하지 않습니다: ${name}`);
+  assertAccount(uid);
   await Sharing.shareAsync(uri, { mimeType, dialogTitle: "쿠폰 백업 저장" });
 }
 export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null, includePreferences = true) {
+  if (!["json", "csv", "pdf"].includes(format)) throw new Error("지원하지 않는 내보내기 형식입니다.");
   const uid = auth.currentUser?.uid;
   assertAccount(uid);
   const source = sourceRecords ?? await fetchCoupons(uid);
@@ -49,21 +54,21 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
     let original = null;
     if (format === "json" && includeOriginals && record.image) {
       original = await imageDataUri(record.image);
-      originalBytes += original.split(",")[1].length * 0.75;
+      originalBytes += originalByteLength(original);
       if (originalBytes > 35 * 1024 * 1024) throw new Error("원본 합계가 35MB를 넘습니다. 시작·끝 번호를 조정해 나눠 내보내 주세요.");
     }
     portable.push({ ...normaliseCoupon({ ...record, image: null }), deletedAt: record.deletedAt || null,
       ...(original ? { original } : {}), image: null });
   }
   assertAccount(uid);
-  if (format === "csv") { const text = toCsv(portable); parseBackup(text, "csv"); return shareText(text, "csv", "text/csv"); }
+  if (format === "csv") { const text = toCsv(portable); parseBackup(text, "csv"); return shareText(text, "csv", "text/csv", uid); }
   if (format === "json") {
     const brandPreferences = includePreferences ? await loadBrandPreferences(uid) : null;
     assertAccount(uid);
     const text = JSON.stringify({ app: "wallet-sync", version: BACKUP_VERSION, exportedAt: new Date().toISOString(), source: sourceRecords === null ? "server" : "local-snapshot", records: portable, brandPreferences }, null, 2);
     // Validate our own size/format before offering an unusable backup.
     parseBackup(text, "json");
-    return shareText(text, "json", "application/json");
+    return shareText(text, "json", "application/json", uid);
   }
   const html = `<html><head><meta charset="utf-8"><style>body{font-family:sans-serif}article{page-break-inside:avoid;border:1px solid #ccc;padding:18px;margin:20px}svg{max-width:100%;height:100px}p{white-space:pre-wrap;word-break:break-all}</style></head><body><h1>WalletSync</h1>${portable.map((record) => {
     let barcode = "";
@@ -88,7 +93,9 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
     });
   }
   const { uri } = await Print.printToFileAsync({ html });
+  assertAccount(uid);
   if (!(await Sharing.isAvailableAsync())) throw new Error("이 기기는 PDF 공유를 지원하지 않습니다.");
+  assertAccount(uid);
   return Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: ".pdf" });
 }
 export async function pickBackup() {

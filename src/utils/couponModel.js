@@ -10,6 +10,7 @@ export const PROVIDERS = {
   other: { label: "기타", url: "" },
 };
 export function normaliseCoupon(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("쿠폰 정보를 읽지 못했습니다.");
   const kind = input.kind || "voucher";
   if (!["voucher", "external"].includes(kind)) throw new Error("지원하지 않는 쿠폰 종류입니다.");
   const brand = typeof input.brand === "string" ? input.brand.trim() : "";

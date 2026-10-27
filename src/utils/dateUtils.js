@@ -1,27 +1,40 @@
 // Calendar dates deliberately have no UTC offset. Legacy timestamps remain readable.
 const { couponMatchesSearch } = require("./couponSearch");
 const toDate = (value) => {
-  if (!value) return null;
-  if (typeof value.toDate === "function") return value.toDate();
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split("-").map(Number);
-    const date = new Date(y, m - 1, d, 12);
-    return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d ? date : null;
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (value === null || value === undefined || value === "" || typeof value === "boolean") return null;
+  try {
+    if (typeof value.toDate === "function") {
+      const date = value.toDate();
+      return date instanceof Date && Number.isFinite(date.getTime()) ? date : null;
+    }
+    if (typeof value.seconds === "number" && typeof value.nanoseconds === "number") {
+      return toDate(value.seconds * 1000 + value.nanoseconds / 1e6);
+    }
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [y, m, d] = value.split("-").map(Number);
+      const date = new Date(0);
+      date.setFullYear(y, m - 1, d); date.setHours(12, 0, 0, 0);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d ? date : null;
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  } catch { return null; }
 };
 const toDay = (value) => {
   const date = toDate(value);
-  return date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` : null;
+  return date ? `${String(date.getFullYear()).padStart(4, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` : null;
 };
 const dayNumber = (value) => {
   const d = toDate(value);
-  return d ? Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000 : null;
+  if (!d) return null;
+  const utc = new Date(0);
+  utc.setUTCFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+  return utc.getTime() / 86400000;
 };
 const daysRemaining = (value, now = new Date()) => {
   const expiry = dayNumber(value);
-  return expiry === null ? null : expiry - dayNumber(now);
+  const today = dayNumber(now);
+  return expiry === null || today === null ? null : expiry - today;
 };
 const getExpiryInfo = (expiryDate, isUsed, now = new Date()) => {
   const neutral = { color: "#64748B", bg: "#F1F5F9", border: "#CBD5E1" };

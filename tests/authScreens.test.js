@@ -1,0 +1,23 @@
+global.IS_REACT_ACT_ENVIRONMENT = true;
+jest.mock("react-native", () => ({ View: "View", Text: "Text", TextInput: "TextInput", TouchableOpacity: "TouchableOpacity", StatusBar: "StatusBar", StyleSheet: { create: (value) => value } }));
+jest.mock("../src/services/authService", () => ({ loginUser: jest.fn(), signUpUser: jest.fn(), getAuthErrorMessage: () => "연결 오류" }));
+jest.mock("../src/utils/feedback", () => ({ Alert: { alert: jest.fn() } }));
+const React = require("react");
+const { create, act } = require("react-test-renderer");
+const Login = require("../src/screens/auth/LoginScreen").default;
+const Register = require("../src/screens/auth/RegisterScreen").default;
+const service = require("../src/services/authService");
+const { Alert } = require("../src/utils/feedback");
+let renderer;
+beforeEach(() => jest.clearAllMocks());
+afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); });
+test.each([[Login, "loginUser"], [Register, "signUpUser"]])("auth requests lock before a second tap and report failures through the cross-platform adapter", async (Screen, operation) => {
+  let reject; service[operation].mockReturnValue(new Promise((_resolve, fail) => { reject = fail; }));
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation: { navigate() {} } })); });
+  await act(async () => { renderer.root.findAllByType("TextInput").forEach((field, i) => field.props.onChangeText(i ? "password123" : "test@example.com")); });
+  const submit = renderer.root.findAllByType("TouchableOpacity")[0].props.onPress;
+  await act(async () => { submit(); submit(); });
+  expect(service[operation]).toHaveBeenCalledTimes(1);
+  await act(async () => { reject(new Error("offline")); await new Promise((resolve) => setImmediate(resolve)); });
+  expect(Alert.alert).toHaveBeenCalledWith(expect.any(String), "연결 오류");
+});

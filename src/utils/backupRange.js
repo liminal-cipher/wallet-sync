@@ -6,6 +6,8 @@ export function backupRange(from, to) {
 }
 export function selectBackupRange(records, range) {
   if (!range) return records;
+  if (!Number.isSafeInteger(range.start) || range.start < 1 ||
+      (range.end !== null && (!Number.isSafeInteger(range.end) || range.end < range.start))) throw new Error("백업 범위의 시작·끝 번호를 확인해 주세요.");
   if (range.start > records.length && !(range.start === 1 && !records.length)) throw new Error("시작 번호가 쿠폰 수보다 큽니다.");
   if (range.end !== null && range.end > records.length) throw new Error("끝 번호가 쿠폰 수보다 큽니다.");
   return records.slice(range.start - 1, range.end ?? records.length);

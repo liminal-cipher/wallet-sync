@@ -22,6 +22,8 @@ function update(uid, change, preserve = false) {
     account(uid); await writeLocal(uid, section, next); account(uid); return next;
   });
   queues.set(uid, operation);
+  const cleanup = () => { if (queues.get(uid) === operation) queues.delete(uid); };
+  operation.then(cleanup, cleanup);
   return operation;
 }
 export const toggleFavouriteBrand = (uid, id) => update(uid, (value) => ({ ...value,

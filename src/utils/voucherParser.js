@@ -75,7 +75,7 @@ function createExpiryDate(year, month, day) {
  * @param {string} text
  * @returns {Date|null}
  */
-function extractExpiryDate(text) {
+function extractSingleExpiryDate(text) {
   if (!text || typeof text !== "string") return null;
 
   // 1. YYYY년 MM월 DD일
@@ -109,6 +109,25 @@ function extractExpiryDate(text) {
   }
 
   return null;
+}
+
+function extractExpiryDate(text) {
+  if (typeof text !== "string" || !text) return null;
+  const dates = (value) => [...value.matchAll(/(?<!\d)(?:\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일?|(?:\d{4}|\d{2})[.\-/]\s*\d{1,2}[.\-/]\s*\d{1,2})(?!\d)/g)];
+  const labelled = /(?:만료일|유효기간|유효일자|사용기한|교환기한)[ \t:：]*([^\r\n]+)/.exec(text);
+  const candidates = dates(labelled ? labelled[1] : text);
+  if (!candidates.length) return null;
+  if (candidates.length === 2) {
+    const between = (labelled ? labelled[1] : text).slice(candidates[0].index + candidates[0][0].length, candidates[1].index);
+    if (/^\s*(?:~|～|–|—|부터|-)\s*$/.test(between)) {
+      const start = extractSingleExpiryDate(candidates[0][0]);
+      const end = extractSingleExpiryDate(candidates[1][0]);
+      return start && end && end >= start ? end : null;
+    }
+  }
+  const parsed = candidates.map((match) => extractSingleExpiryDate(match[0]));
+  if (parsed.some((date) => !date)) return null;
+  return new Set(parsed.map((date) => date.getTime())).size === 1 ? parsed[0] : null;
 }
 
 /**

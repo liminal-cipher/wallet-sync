@@ -5,9 +5,11 @@ jest.mock("firebase/storage", () => ({ getStorage: jest.fn(() => ({})), ref: jes
 jest.mock("../src/services/firebase", () => ({ auth: { currentUser: { uid: "owner" } } }));
 const storage = require("firebase/storage");
 const files = require("expo-file-system/legacy");
+const { auth } = require("../src/services/firebase");
 const { imageDataUri, uploadOriginal } = require("../src/services/imageService");
 const image = { id: "12345678-1234-4234-8234-123456789abc", ownerId: "owner", mime: "image/png", cloudPath: null };
 beforeEach(() => {
+  auth.currentUser = { uid: "owner" };
   jest.clearAllMocks(); files.getInfoAsync.mockResolvedValue({ exists: true }); files.readAsStringAsync.mockResolvedValue("YWJj");
   storage.getMetadata.mockReset().mockRejectedValue({ code: "storage/object-not-found" }); storage.uploadString.mockResolvedValue();
 });
@@ -36,4 +38,15 @@ test("upload failures and mismatched existing originals retain a local recovery 
   await expect(uploadOriginal(image)).resolves.toEqual({ image, localOnly: true });
   expect(storage.uploadString).not.toHaveBeenCalled();
   await expect(imageDataUri({ ...image, ownerId: "other" })).rejects.toThrow("계정");
+});
+
+test("already-cloud-backed images still enforce the signed-in owner", async () => {
+  const foreign = { ...image, ownerId: "other", cloudPath: `originals/other/${image.id}` };
+  await expect(uploadOriginal(foreign)).rejects.toThrow("계정");
+  expect(storage.uploadString).not.toHaveBeenCalled();
+});
+
+test("a late original read cannot return the previous account's image", async () => {
+  files.readAsStringAsync.mockImplementationOnce(async () => { auth.currentUser = { uid: "other" }; return "YWJj"; });
+  await expect(imageDataUri(image)).rejects.toThrow("계정");
 });

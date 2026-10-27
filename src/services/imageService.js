@@ -4,14 +4,11 @@ import * as Crypto from "expo-crypto";
 import { getStorage, ref, uploadString, getMetadata, getBytes } from "firebase/storage";
 import { auth } from "./firebase";
 import { validateImage } from "../utils/couponModel";
+import { MAX_IMAGE_BYTES, originalByteLength } from "../utils/inputLimits";
+import { openLocalDatabase } from "./localDatabase";
 
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const imageDb = () => new Promise((resolve, reject) => {
-  const request = indexedDB.open("wallet-sync-images", 1);
-  request.onupgradeneeded = () => request.result.createObjectStore("images");
-  request.onsuccess = () => resolve(request.result);
-  request.onerror = () => reject(new Error("원본 이미지 보관 공간을 열 수 없습니다."));
-});
+export { MAX_IMAGE_BYTES } from "../utils/inputLimits";
+const imageDb = () => openLocalDatabase("wallet-sync-images", "images");
 async function webStore(key, blob) {
   const db = await imageDb();
   try {
@@ -63,31 +60,41 @@ export async function imageDataUri(image) {
   requireImage(image);
   if (Platform.OS !== "web") {
     if ((await FileSystem.getInfoAsync(localUri(image))).exists) {
-      return `data:${image.mime};base64,${await FileSystem.readAsStringAsync(localUri(image), { encoding: FileSystem.EncodingType.Base64 })}`;
+      const content = await FileSystem.readAsStringAsync(localUri(image), { encoding: FileSystem.EncodingType.Base64 });
+      requireImage(image);
+      return `data:${image.mime};base64,${content}`;
     }
     // React Native cannot construct Blob(ArrayBuffer); encode authenticated bytes
     // directly instead of losing cross-device originals at that boundary.
     const bytes = await remoteBytes(image);
+    requireImage(image);
     let binary = "";
     for (let offset = 0; offset < bytes.length; offset += 16384) binary += String.fromCharCode(...bytes.subarray(offset, offset + 16384));
     return `data:${image.mime};base64,${btoa(binary)}`;
   }
-  const local = await webStore(`${image.ownerId}/${image.id}`);
+  let local;
+  try { local = await webStore(`${image.ownerId}/${image.id}`); }
+  catch (error) { if (!image.cloudPath) throw error; }
   const blob = local || new Blob([await remoteBytes(image)], { type: image.mime });
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => {
+      try { requireImage(image); resolve(reader.result); } catch (error) { reject(error); }
+    };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
 }
 export async function uploadOriginal(image) {
   if (!image) return { image: null, localOnly: false };
+  requireImage(image);
   if (image.cloudPath) return { image, localOnly: false };
   try {
     requireImage(image);
     const cloudPath = `originals/${auth.currentUser.uid}/${image.id}`;
     const dataUri = await imageDataUri(image);
+    requireImage(image);
+    originalByteLength(dataUri);
     const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, dataUri);
     const storage = getStorage();
     storage.maxUploadRetryTime = 15000;
@@ -99,15 +106,25 @@ export async function uploadOriginal(image) {
     if (existing) {
       if (existing.customMetadata?.sha256 !== sha256) throw new Error("원본 이미지 내용이 다릅니다.");
     } else {
+      requireImage(image);
       await uploadString(target, dataUri, "data_url", { contentType: image.mime, customMetadata: { sha256 } });
     }
     return { image: { ...image, cloudPath }, localOnly: false };
   } catch { return { image, localOnly: true }; }
 }
 export async function importImage(dataUri) {
+  originalByteLength(dataUri);
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("로그인이 필요합니다.");
   if (Platform.OS === "web") return retainImage({ uri: dataUri, mimeType: dataUri.slice(5, dataUri.indexOf(";")) });
   const mimeType = dataUri.slice(5, dataUri.indexOf(";"));
   const temporary = `${FileSystem.cacheDirectory}${Crypto.randomUUID()}`;
-  await FileSystem.writeAsStringAsync(temporary, dataUri.split(",")[1], { encoding: FileSystem.EncodingType.Base64 });
-  return retainImage({ uri: temporary, mimeType });
+  try {
+    await FileSystem.writeAsStringAsync(temporary, dataUri.split(",")[1], { encoding: FileSystem.EncodingType.Base64 });
+    if (auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다.");
+    return await retainImage({ uri: temporary, mimeType });
+  } finally {
+    // Only the temporary file created by this operation is removed.
+    await FileSystem.deleteAsync(temporary, { idempotent: true }).catch(() => {});
+  }
 }

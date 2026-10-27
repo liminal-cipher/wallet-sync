@@ -12,13 +12,17 @@ const requireUid = () => {
   if (!uid) throw new Error("로그인이 필요합니다.");
   return uid;
 };
-const recordsFrom = (snapshot) => sortCouponsByExpiry(snapshot.docs.map((item) => ({ ...item.data(), id: item.id })));
+const assertUid = (uid) => { if (requireUid() !== uid) throw new Error("계정이 변경됐습니다."); };
+const recordsFrom = (snapshot) => sortCouponsByExpiry(snapshot.docs.map((item) => ({ ...item.data(), ...normaliseCoupon(item.data()), id: item.id })));
 export const subscribeCoupons = (userId, onUpdate, onError) => {
   const uid = userId || auth.currentUser?.uid;
   if (!uid) { onUpdate?.([]); return () => {}; }
   return onSnapshot(query(collection(db, "coupons"), where("userId", "==", uid)), { includeMetadataChanges: true }, (snapshot) => {
-    const records = recordsFrom(snapshot);
-    onUpdate?.(records, { fromCache: snapshot.metadata.fromCache });
+    if (auth.currentUser?.uid !== uid) return;
+    let records;
+    try { records = recordsFrom(snapshot); }
+    catch (error) { onError?.(error); return; }
+    onUpdate?.(records, { fromCache: snapshot.metadata.fromCache, hasPendingWrites: snapshot.metadata.hasPendingWrites });
     // Never turn an unconfirmed cache miss into an automatic recovery snapshot.
     if (!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites) {
       captureSnapshot(uid, records).catch((error) => onError?.(error, { localRecovery: true }));
@@ -28,12 +32,17 @@ export const subscribeCoupons = (userId, onUpdate, onError) => {
 export const fetchCoupons = async (userId) => {
   const uid = userId || auth.currentUser?.uid;
   if (!uid) return [];
-  return recordsFrom(await getDocsFromServer(query(collection(db, "coupons"), where("userId", "==", uid))));
+  assertUid(uid);
+  const snapshot = await getDocsFromServer(query(collection(db, "coupons"), where("userId", "==", uid)));
+  assertUid(uid);
+  return recordsFrom(snapshot);
 };
 export const getCoupon = async (id) => {
+  const uid = requireUid();
   const snapshot = await getDoc(doc(db, "coupons", id));
+  assertUid(uid);
   if (!snapshot.exists() || snapshot.data().userId !== requireUid()) throw new Error("쿠폰을 찾을 수 없습니다.");
-  return { ...snapshot.data(), id: snapshot.id };
+  return { ...snapshot.data(), ...normaliseCoupon(snapshot.data()), id: snapshot.id };
 };
 const identityId = async (uid, identity) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, JSON.stringify([uid, identity]));
 const duplicateError = (record) => {
@@ -58,6 +67,7 @@ export const addCoupon = async (input, options = {}) => {
   await runTransaction(db, async (transaction) => {
     if (requireUid() !== uid) throw new Error("계정이 변경됐습니다.");
     const keySnapshot = await transaction.get(keyRef);
+    assertUid(uid);
     if (keySnapshot.exists() && (!observedKey.exists() ||
         keySnapshot.data().couponId !== observedKey.data().couponId ||
         existing.some((record) => record.id === keySnapshot.data().couponId))) throw duplicateError({});
@@ -95,6 +105,7 @@ export const updateCoupon = async (id, patch, expectedRevision) => {
     }
     const reserved = await transaction.get(keyRef);
     const oldReserved = keyRef.path === oldKeyRef.path ? reserved : await transaction.get(oldKeyRef);
+    assertUid(uid);
     if (reserved.exists() && reserved.data().couponId !== id) throw duplicateError({});
     transaction.set(keyRef, { couponId: id });
     if (keyRef.path !== oldKeyRef.path && oldReserved.exists() && oldReserved.data().couponId === id) transaction.delete(oldKeyRef);
@@ -109,12 +120,15 @@ export const updateCoupon = async (id, patch, expectedRevision) => {
 export const deleteCoupon = (id, revision) => updateCoupon(id, { deletedAt: new Date() }, revision);
 export const restoreCoupon = (id, revision) => updateCoupon(id, { deletedAt: null }, revision);
 export const fetchCouponHistory = async (id) => {
-  requireUid();
+  const uid = requireUid();
   const snapshot = await getDocs(collection(db, "coupons", id, "history"));
+  assertUid(uid);
   return snapshot.docs.map((item) => ({ ...item.data(), version: Number(item.id) })).sort((a, b) => b.version - a.version);
 };
 export const restoreCouponVersion = async (id, version, expectedRevision) => {
+  const uid = requireUid();
   const snapshot = await getDoc(doc(db, "coupons", id, "history", String(version)));
+  assertUid(uid);
   if (!snapshot.exists()) throw new Error("이전 버전을 찾을 수 없습니다.");
   const record = snapshot.data().record;
   if (record.userId !== requireUid()) throw new Error("다른 계정의 이력입니다.");

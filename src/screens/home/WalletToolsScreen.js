@@ -12,6 +12,8 @@ import { requestNotificationPermissions } from "../../services/notificationServi
 import { validateBackupRecords, validateRestoreSession } from "../../utils/backupData";
 import ConfirmationDialog, { useConfirmation } from "../../components/ConfirmationDialog";
 import { backupRange } from "../../utils/backupRange";
+import { reminderSchedule } from "../../utils/reminderSchedule";
+import useCalendarClock from "../../hooks/useCalendarClock";
 
 export default function WalletToolsScreen({ navigation }) {
   const uid = useRef(auth.currentUser?.uid).current;
@@ -29,6 +31,9 @@ export default function WalletToolsScreen({ navigation }) {
   const [enabled, setEnabled] = useState(true);
   const [time, setTime] = useState("09:00");
   const [days, setDays] = useState("7,3,0");
+  const [savedSettings, setSavedSettings] = useState(null);
+  const now = useCalendarClock();
+  const forecast = reminderSchedule(uid, coupons, savedSettings, now);
   const [exportFrom, setExportFrom] = useState("1");
   const [exportTo, setExportTo] = useState("");
   const pending = useRef(false);
@@ -48,6 +53,7 @@ export default function WalletToolsScreen({ navigation }) {
     if (previousSession.status === "fulfilled") setPreviousResume(previousSession.value);
     if (settings.status === "fulfilled") {
       const value = settings.value;
+      setSavedSettings(value);
       setEnabled(value.enabled); setTime(`${String(value.hour).padStart(2, "0")}:${String(value.minute).padStart(2, "0")}`); setDays(value.days.join(","));
     }
     try {
@@ -82,7 +88,8 @@ export default function WalletToolsScreen({ navigation }) {
   const saveSettings = () => run(async () => {
     if (!/^\d{2}:\d{2}$/.test(time) || !/^\d+(\s*,\s*\d+)*$/.test(days)) throw new Error("시간은 HH:MM, 사전 알림은 7,3,0처럼 입력해 주세요.");
     const [hour, minute] = time.split(":").map(Number);
-    await saveReminderSettings(uid, { enabled, hour, minute, days: days.split(",").map(Number) });
+    const settings = await saveReminderSettings(uid, { enabled, hour, minute, days: days.split(",").map(Number) });
+    setSavedSettings(settings);
     const granted = enabled && await requestNotificationPermissions();
     setMessage(Platform.OS === "web" ? "설정은 이 브라우저에 보관됩니다. 웹에서는 만료 알림을 지원하지 않습니다." : enabled && !granted ? "설정은 저장됐습니다. 기기 설정에서 알림 권한을 허용해 주세요." : "알림 설정을 이 기기에 저장했습니다.");
   });
@@ -153,6 +160,12 @@ export default function WalletToolsScreen({ navigation }) {
       <Text style={ui.note}>기기 현지 시간을 사용합니다. 각 기기에서 따로 설정할 수 있습니다. 이미 지난 알림은 다시 발송하지 않습니다.</Text>
       <Button label="알림 설정 저장" onPress={saveSettings} disabled={busy} />
       <Button label="기본값 채우기" secondary disabled={busy} onPress={() => { setEnabled(DEFAULT_REMINDERS.enabled); setTime("09:00"); setDays("7,3,0"); }} />
+      <Text style={ui.heading}>예정 알림 미리보기</Text>
+      <Text style={ui.note}>저장한 설정과 현재 목록으로 계산한 다음 20건입니다. 기기 권한·예약 한도·연결 상태에 따라 실제 예약과 수신은 달라질 수 있습니다. 웹에서는 발송하지 않습니다.</Text>
+      {!savedSettings ? <Text style={ui.note}>설정을 읽거나 저장한 뒤 확인해 주세요.</Text> : !forecast.length && <Text style={ui.note}>예정된 알림이 없습니다. 알림 사용 여부·시간·쿠폰 만료일을 확인해 주세요.</Text>}
+      {forecast.slice(0, 20).map((entry) => <Text key={`${entry.couponId}:${entry.daysBefore}`} style={ui.note}>
+        {entry.date.toLocaleString("ko-KR")} · {entry.brand} · {entry.daysBefore ? `${entry.daysBefore}일 전` : "만료 당일"}
+      </Text>)}
     </>}
   </Page>;
 }

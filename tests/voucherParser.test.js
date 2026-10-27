@@ -7,6 +7,13 @@ const {
 
 describe("voucherParser", () => {
   describe("extractExpiryDate", () => {
+    test("prefers an expiry label over purchase dates and uses the end of a validity range", () => {
+      expect(extractExpiryDate("구매일 2026-10-01\n만료일 2026-12-31")).toEqual(new Date(2026, 11, 31, 23, 59, 59, 999));
+      expect(extractExpiryDate("유효기간 2026-10-01 ~ 2026-12-31")).toEqual(new Date(2026, 11, 31, 23, 59, 59, 999));
+      expect(extractExpiryDate("2026-10-01 / 2026-12-31")).toBeNull();
+      expect(extractExpiryDate("유효기간 2026-12-31 ~ 2026-10-01")).toBeNull();
+      expect(extractExpiryDate("구매일 2026-10-01\n만료일 2026-02-30")).toBeNull();
+    });
     test("extracts Korean formatted date (YYYY년 MM월 DD일)", () => {
       const text = "유효기간: 2026년 10월 25일까지 사용 가능";
       const date = extractExpiryDate(text);

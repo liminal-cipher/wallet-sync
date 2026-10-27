@@ -42,15 +42,20 @@ export default function AddCouponScreen({ navigation, route }) {
   const [text, setText] = useState("");
   const [permission, requestPermission] = useCameraPermissions();
   const saving = useRef(false);
+  const imagePending = useRef(false);
   const scanned = useRef(false);
   const saved = useRef(false);
   const now = useCalendarClock();
   useEffect(() => {
     let active = true;
+    saved.current = false;
+    setReady(false); setDirty(false); setDraft(null); setRevision(0); setForm(initialForm());
     (async () => {
       const record = id ? await getCoupon(id) : null;
       const cached = await readLocal(uid, section);
       if (!active) return;
+      if (cached && (!cached.form || typeof cached.form !== "object" || Array.isArray(cached.form) ||
+          !Number.isSafeInteger(cached.revision) || cached.revision < 0)) throw new Error("입력 초안을 읽지 못했습니다. 기존 사본은 유지됩니다.");
       if (record) {
         setForm({ ...initialForm(), ...record, expiryDay: toDay(record.expiryDay || record.expiryDate) || "" });
         setRevision(record.revision || 0);
@@ -94,7 +99,8 @@ export default function AddCouponScreen({ navigation, route }) {
     changeFields({ barcodeNumber: String(data), barcodeType: type });
   };
   const pickImage = async () => {
-    if (processing) return;
+    if (imagePending.current) return;
+    imagePending.current = true;
     setProcessing(true); setError("");
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
@@ -105,7 +111,7 @@ export default function AddCouponScreen({ navigation, route }) {
       try { setText(await recogniseImage(asset.uri)); setSmart(true); }
       catch (e) { setError(e.message); }
     } catch (e) { setError(e.message); }
-    finally { setProcessing(false); }
+    finally { imagePending.current = false; setProcessing(false); }
   };
   const save = async () => {
     if (saving.current || !ready || processing) return;
