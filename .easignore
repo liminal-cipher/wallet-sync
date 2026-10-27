@@ -1,0 +1,31 @@
+# Include only the source and configuration needed for the Android preview.
+/*
+!/.easignore
+!/App.js
+!/index.js
+!/app.json
+!/eas.json
+!/package.json
+!/package-lock.json
+!/LICENSE
+!/src
+!/src/**
+!/assets
+!/assets/**
+!/plugins
+!/plugins/**
+!/scripts
+!/scripts/**
+
+# Keep local configuration and signing material outside source uploads.
+**/node_modules/
+**/.env*
+**/*.log
+**/*.jks
+**/*.keystore
+**/*.p8
+**/*.p12
+**/*.pem
+**/*.key
+**/credentials.json
+**/google-services.json
