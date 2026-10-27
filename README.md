@@ -16,7 +16,7 @@ WalletSync treats a coupon as a record instead of a photo: it has a brand, a bar
 
 - Register, sign in and request password recovery; sessions persist across relaunches.
 - Choose from an offline catalogue of 17 merchant entries and 61 selected products, or use scans, local OCR, pasted text and custom entry. Generated titles remain editable; original barcode payloads and symbology are preserved.
-- Search brands and products by aliases or Korean initial consonants, save device favourites and recent choices, and filter active · used · expired · expiring-soon coupons. Expiry reminders are configurable per device; calendar dates stay stable across daylight-saving boundaries.
+- Search brands, products, barcodes and conditions, save device favourites and recent choices, and filter active · used · expired · expiring-soon coupons. See expiry counts and recorded monetary balances, sort by expiry, registration or name, and preview upcoming device reminders.
 - Track payment-app events with conditions and original-provider links. Dynamic payment credentials remain in the provider's app.
 - Synchronise records through Firestore, recover deletions from trash and edits from version history, and export JSON · CSV · PDF. Validated JSON and CSV restores add missing coupons without overwriting existing records.
 
@@ -24,6 +24,7 @@ The interface is in Korean. Each account only ever loads its own coupons.
 
 Browser captures below use local emulators and synthetic vouchers. The brand
 picker capture renders the real registration component in a layout harness.
+These captures predate the wallet overview and reminder forecast additions.
 
 ![Brand selection with bundled official-site identity assets](docs/images/brand-picker.png)
 ![Wallet records created through the local emulator flow](docs/images/wallet.png)
@@ -97,8 +98,11 @@ wallet-sync/
 
 Utility, service and component regression tests run with Jest. Local Firestore and Storage emulator tests exercise ownership, simultaneous saves, revision conflicts, reversible changes and immutable originals. Automated exports check web, iOS and Android JavaScript bundling. These checks do not establish physical-device OCR accuracy, barcode-reader compatibility or notification delivery.
 
-The latest local emulator run passed 226 tests across 27 suites, with no skipped
+The latest local emulator run passed 262 tests across 35 suites, with no skipped
 tests. Browser checks used synthetic vouchers and local authentication/data services.
+The 27 October changes have component/service coverage and three-platform
+JavaScript exports; they have not received a new browser or physical-device
+acceptance pass. See the [reliability review](docs/reliability-review.md).
 
 - **Data isolation is defined in `firestore.rules`.** Queries filter by `userId`, and the repository contains version-controlled Firestore security rules enforcing document ownership boundaries.
 - **Real-time synchronisation.** Coupon additions, status updates and trash changes are received by active devices via Firestore snapshot listeners.
@@ -108,7 +112,7 @@ tests. Browser checks used synthetic vouchers and local authentication/data serv
 - **Recovery has explicit boundaries.** JSON v3 backups contain current coupons, trash and optional brand favourites/recent choices. They do not contain historical versions, drafts or reminder preferences. Settings restore only by explicit choice, with a pre-restore copy retained. JSON v1/v2 and CSV imports remain supported. See [Recovery and Data Handling](docs/recovery.md).
 - **Catalogue coverage is deliberately limited.** The 17 entries have 61 selected products, with custom entry for missing products. Fourteen official-site identity images are bundled; Olive Young and Coffee Bean use text tiles. There is no live price feed or issuer balance synchronisation. See [Brand Selection, Search and Favourites](docs/brand-catalogue.md).
 - **Browser and device verification have different boundaries.** Earlier local-emulator browser checks cover registration, wallet search, favourites, recent choices and manual balance edits. New preference consent and in-app history confirmations have component coverage; current Windows browser automation was unavailable because URL-policy enforcement was unsupported. Physical-device OCR accuracy, checkout scans and native file sharing remain unmeasured.
-- **Dependency maintenance retains explicit limits.** Expo SDK 55 and Jest compatibility checks pass after an incremental upgrade. The audit reports zero Critical entries, with 52 affected package entries originating in four remaining advisories. Expo Doctor passes 19 of 20 checks and still flags the OCR library as untested on the New Architecture. See [Dependency Maintenance](docs/dependency-maintenance.md) for the update scope, remaining advisory paths and verification commands.
+- **Dependency maintenance retains explicit limits.** Expo SDK 55 patch compatibility checks pass. The 27 October audit reports zero Critical entries and five High affected package entries originating in two remaining toolchain advisories. Expo Doctor passes all 20 checks; physical-device OCR remains unverified. See [Dependency Maintenance](docs/dependency-maintenance.md).
 
 ## Getting Started
 
@@ -129,8 +133,10 @@ updates under these rules. This repository does not deploy rules automatically.
 Prerequisites: an SDK 55-supported Node.js release (24.20.0 used for verification)
 and Expo CLI. Native iOS compilation requires Xcode 26.
 
-For native builds, first set your own `ios.bundleIdentifier` and `android.package`
-in `app.json`; native build tools must also be installed for the target platform.
+For native builds, confirm the configured `android.package` and set your own
+`ios.bundleIdentifier` in `app.json`. Native build tools must also be installed
+for local compilation. The [Android preview guide](docs/android-preview.md)
+describes the standalone APK profile and required Firebase/EAS setup.
 
 ```bash
 git clone https://github.com/liminal-cipher/wallet-sync.git
@@ -179,11 +185,12 @@ browser OCR downloads its worker and Korean/English models on first use.
 - [x] **Recovery and portable export**: Trash, edit history, device snapshots, JSON · CSV restore and PDF export.
 - [x] **Image and event records**: Original-image retention, local OCR and original-provider links.
 - [x] **Brand selection and discovery**: Offline brand/menu selection, monetary vouchers, aliases, Korean initial consonants, favourites and recent choices.
+- [x] **Wallet overview and reliability review**: Balance/expiry summaries, sorting, expanded search, reminder forecasts and regression coverage for recovery, account changes and malformed inputs. See the [file-level review and acceptance scenarios](docs/reliability-review.md).
 - [ ] **Device acceptance checks**: Verify OCR, checkout scanning, notification delivery and native file sharing on physical devices.
 
 ## Status
 
-In progress. Personal project. Brand selection, portable favourites and recovery features are implemented; production rule changes and physical-device acceptance checks remain pending. Last updated 2026-10-18.
+In progress. Personal project. Wallet overview, reminder forecasts, portable favourites and recovery features are implemented locally. Production configuration and physical-device acceptance remain unverified. Last updated 2026-10-27.
 
 ## Licence
 

@@ -1,9 +1,47 @@
 # Dependency Maintenance
 
-Current runtime checked on 2026-10-18 with Node.js 24.20.0 and npm 11.19.0:
-Expo 55.0.31, React Native 0.83.10 and React 19.2.0. The SDK 54 maintenance
+Current runtime checked on 2026-10-27 with Node.js 24.20.0:
+Expo 55.0.32, React Native 0.83.10 and React 19.2.0. The SDK 54 maintenance
 record below is retained to explain the audit baseline and scoped patches.
 No backend changes were deployed.
+
+## 27 October Patch Alignment
+
+The compatibility check requested Expo 55.0.32 and expo-sharing 55.0.25.
+Both were updated within SDK 55, retaining the existing Android preview scripts
+and scoped Firestore override. Their official changelogs describe maintenance
+releases without user-facing changes:
+[Expo](https://github.com/expo/expo/blob/sdk-55/packages/expo/CHANGELOG.md),
+[sharing](https://github.com/expo/expo/blob/sdk-55/packages/expo-sharing/CHANGELOG.md).
+The installed config-plugin dependency now uses xcode 4.0.0 without the former
+uuid path. The lockfile records the exact resolved tree.
+
+`expo install --check` passes and Expo Doctor passes all 20 checks. This is
+tooling compatibility evidence, not physical-device OCR or native compilation.
+The final tests and JavaScript exports are recorded in
+[the reliability review](reliability-review.md).
+
+The live audit before these patches reported 8 affected package entries (5 High,
+3 Moderate, 0 Critical). Afterwards it reports 5 High, 0 Moderate and 0 Critical,
+with two originating advisories. These counts supersede the historical October
+18 numbers below; changes in advisory data are not all attributable to this patch.
+Audit still exits with code 1:
+
+- `node-forge@1.4.0` through Expo CLI/certificate tooling. The
+  [advisory](https://github.com/advisories/GHSA-86w9-cpqp-85rv) lists no patched
+  release. Follow the maintainer fix and Expo adoption.
+- `zod@3.25.76` through Expo CLI. The
+  [advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) lists 4.6.6 as
+  patched. Replacing the CLI's major-version contract with a global override is
+  not a verified fix; use an upstream-compatible CLI update when available.
+
+The application's coupon parsing does not import these packages. That does not
+establish that every toolchain invocation is unexploitable. No forced audit fix,
+SDK downgrade, advisory suppression or unverified major override was applied.
+
+## Historical Verification
+
+The remaining sections describe the 18 October baseline, not the latest audit.
 
 ## SDK 55 Follow-up
 
