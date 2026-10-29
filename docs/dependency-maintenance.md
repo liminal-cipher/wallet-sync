@@ -7,14 +7,14 @@ No backend changes were deployed.
 
 ## 27 October Patch Alignment
 
-The compatibility check requested Expo 55.0.32 and expo-sharing 55.0.25.
+The compatibility check requested Expo 55.0.32 and `expo-sharing` 55.0.25.
 Both were updated within SDK 55, retaining the existing Android preview scripts
 and scoped Firestore override. Their official changelogs describe maintenance
 releases without user-facing changes:
 [Expo](https://github.com/expo/expo/blob/sdk-55/packages/expo/CHANGELOG.md),
 [sharing](https://github.com/expo/expo/blob/sdk-55/packages/expo-sharing/CHANGELOG.md).
-The installed config-plugin dependency now uses xcode 4.0.0 without the former
-uuid path. The lockfile records the exact resolved tree.
+The installed config-plugin dependency now uses `xcode` 4.0.0 without the former
+`uuid` path. The lockfile records the exact resolved tree.
 
 `expo install --check` passes and Expo Doctor passes all 20 checks. This is
 tooling compatibility evidence, not physical-device OCR or native compilation.
@@ -47,7 +47,7 @@ The remaining sections describe the 18 October baseline, not the latest audit.
 
 The next incremental upgrade follows the [SDK 55 release notes](https://expo.dev/changelog/sdk-55).
 Expo modules, React Native, React DOM, React Test Renderer, screens and SVG
-versions match the SDK's bundled version map. Jest and babel-jest remain 29.7.0.
+versions match the SDK's bundled version map. Jest and `babel-jest` remain 29.7.0.
 The removed `newArchEnabled` and `android.edgeToEdgeEnabled` configuration flags
 were removed from this app's configuration. New Architecture remains mandatory;
 the experimental Hermes v1 option was not enabled.
@@ -65,8 +65,8 @@ absent from the SDK 55 lockfile.
 | Total affected package entries | 54 | 52 |
 | Distinct advisory URLs | 6 | 4 |
 
-The four remaining advisories originate in braces, node-forge, sprintf-js and
-uuid, described in the initial audit below. The audit remains enabled and exits
+The four remaining advisories originate in `braces`, `node-forge`, `sprintf-js` and
+`uuid`, described in the initial audit below. The audit remains enabled and exits
 with code 1. Clean installation, the complete dependency tree, SDK version
 compatibility, configuration/plugin introspection, 226 emulator tests and all
 three platform JavaScript exports passed. Expo Doctor passed 19 of 20 checks;
@@ -81,7 +81,7 @@ builds require Xcode 26, and physical-device OCR acceptance remains outstanding.
 | Area | Previous | Installed | Reason |
 | --- | --- | --- | --- |
 | Expo | 54.0.30 | 54.0.37 | Match the SDK 54 compatibility check. |
-| Jest and babel-jest | 30.5.0 | 29.7.0 | Align the runner and transformer with the SDK recommendation. |
+| Jest and `babel-jest` | 30.5.0 | 29.7.0 | Align the runner and transformer with the SDK recommendation. |
 | Babel core | 7.28.5 | 7.29.7 | Apply the [source-map file-read fix](https://github.com/advisories/GHSA-4x5r-pxfx-6jf8) within Babel 7. |
 | Firebase | 12.7.0 | 12.19.0 | Update within the existing Firebase 12 range. |
 | React Navigation native | 7.1.26 | 7.5.1 | Update within the existing major version and declared peer requirements. |
@@ -127,11 +127,11 @@ the same unresolved advisory through several parents.
 
 | Package and path | Remaining Issue | Follow-up |
 | --- | --- | --- |
-| `braces@3.0.3`, through Jest file matching | [Stack exhaustion on nested patterns](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). The advisory lists no patched version. | Monitor the upstream fix and its adoption by micromatch. |
-| `image-size@1.2.1`, through Metro | [JXL/HEIF](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq) and [ICNS](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) parser hangs. The fixed version is 2.0.3. | Validate a Metro/SDK migration that supports image-size 2; retain the current major-version contract for this maintenance. |
+| `braces@3.0.3`, through Jest file matching | [Stack exhaustion on nested patterns](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). The advisory lists no patched version. | Monitor the upstream fix and its adoption by `micromatch`. |
+| `image-size@1.2.1`, through Metro | [JXL/HEIF](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq) and [ICNS](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) parser hangs. The fixed version is 2.0.3. | Validate a Metro/SDK migration that supports `image-size` 2; retain the current major-version contract for this maintenance. |
 | `node-forge@1.4.0`, through Expo CLI and code-signing tools | [Signature verification issue](https://github.com/advisories/GHSA-86w9-cpqp-85rv). The advisory lists no patched version. | Monitor the upstream fix and Expo's adoption. |
 | `sprintf-js@1.0.3`, through Jest coverage configuration parsing | [Unbounded precision specifiers](https://github.com/advisories/GHSA-hp3w-g68c-fv3c). The advisory lists no patched version. | Monitor the fix or replacement in the coverage configuration dependency chain. |
-| `uuid@7.0.3`, through xcode and Expo config plugins | [Missing buffer checks in v3/v5/v6](https://github.com/advisories/GHSA-w5hq-g745-h8pq), fixed in 11.1.1. The inspected xcode caller uses `v4()`, which the advisory excludes. | Monitor xcode's dependency update; retain the warning rather than force a major-version replacement. |
+| `uuid@7.0.3`, through `xcode` and Expo config plugins | [Missing buffer checks in v3/v5/v6](https://github.com/advisories/GHSA-w5hq-g745-h8pq), fixed in 11.1.1. The inspected `xcode` caller uses `v4()`, which the advisory excludes. | Monitor `xcode`'s dependency update; retain the warning rather than force a major-version replacement. |
 
 These paths are build/test/configuration tools, rather than coupon model imports.
 Expo is a production dependency, so `npm audit --omit=dev` does not remove every

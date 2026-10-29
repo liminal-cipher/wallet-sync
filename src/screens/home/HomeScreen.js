@@ -56,7 +56,7 @@ export default function HomeScreen() {
 
   const navigation = useNavigation();
 
-  // Setup real-time listener whenever screen is focused
+  // Set up a real-time listener whenever the screen is focused
   useFocusEffect(
     useCallback(() => {
       setLoading(true);

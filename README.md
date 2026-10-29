@@ -64,7 +64,7 @@ wallet-sync/
 │   │   ├── imageService.js       # Durable originals and authenticated uploads
 │   │   ├── localRecovery.js      # Account-scoped drafts and snapshots
 │   │   ├── ocrService.*.js       # Native and browser OCR adapters
-│   │   └── notificationService.js# Expiry notification scheduling
+│   │   └── notificationService.js # Expiry notification scheduling
 │   └── utils/
 │       ├── authUtils.js          # Localised error code mappings
 │       ├── barcodeEncoder.js     # Code 128 encoding patterns
@@ -180,13 +180,13 @@ browser OCR downloads its worker and Korean/English models on first use.
 
 ## Roadmap
 
-- [x] **Real-time Firestore sync**: Real-time snapshot listener for multi-device instant synchronisation.
-- [x] **Smart voucher parser & extractor**: Automatic parsing of brand, barcode PIN, and expiry date from voucher text/OCR.
-- [x] **Recovery and portable export**: Trash, edit history, device snapshots, JSON · CSV restore and PDF export.
-- [x] **Image and event records**: Original-image retention, local OCR and original-provider links.
-- [x] **Brand selection and discovery**: Offline brand/menu selection, monetary vouchers, aliases, Korean initial consonants, favourites and recent choices.
-- [x] **Wallet overview and reliability review**: Balance/expiry summaries, sorting, expanded search, reminder forecasts and regression coverage for recovery, account changes and malformed inputs. See the [file-level review and acceptance scenarios](docs/reliability-review.md).
-- [ ] **Device acceptance checks**: Verify OCR, checkout scanning, notification delivery and native file sharing on physical devices.
+- [x] **Done:** **Real-time Firestore sync**: Real-time snapshot listener for multi-device instant synchronisation.
+- [x] **Done:** **Smart voucher parser & extractor**: Automatic parsing of brand, barcode PIN, and expiry date from voucher text/OCR.
+- [x] **Done:** **Recovery and portable export**: Trash, edit history, device snapshots, JSON · CSV restore and PDF export.
+- [x] **Done:** **Image and event records**: Original-image retention, local OCR and original-provider links.
+- [x] **Done:** **Brand selection and discovery**: Offline brand/menu selection, monetary vouchers, aliases, Korean initial consonants, favourites and recent choices.
+- [x] **Done:** **Wallet overview and reliability review**: Balance/expiry summaries, sorting, expanded search, reminder forecasts and regression coverage for recovery, account changes and malformed inputs. See the [file-level review and acceptance scenarios](docs/reliability-review.md).
+- [ ] **Next:** **Device acceptance checks**: Verify OCR, checkout scanning, notification delivery and native file sharing on physical devices.
 
 ## Status
 
