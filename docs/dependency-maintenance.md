@@ -1,9 +1,50 @@
 # Dependency Maintenance
 
-Current runtime checked on 2026-10-27 with Node.js 24.20.0:
+Current runtime checked on 2026-11-03 with Node.js 24.20.0:
 Expo 55.0.32, React Native 0.83.10 and React 19.2.0. The SDK 54 maintenance
 record below is retained to explain the audit baseline and scoped patches.
 No backend changes were deployed.
+
+## 3 November Security Updates
+
+Two transitive dependencies were updated within their parents' declared ranges:
+
+| Dependency | Previous | Installed | Parent constraint |
+| --- | --- | --- | --- |
+| `node-forge` | 1.4.0 | 1.4.2 | Expo CLI and certificate tooling: `^1.3.3` |
+| `re2js` | 2.8.6 | 2.9.1 | Firestore 4.17.2: `^2.8.3` |
+
+Forge 1.4.1 contains the security fixes and 1.4.2 restores PEM Buffer input
+compatibility; see the [maintainer changelog](https://github.com/digitalbazaar/forge/blob/v1.4.2/CHANGELOG.md).
+The RE2JS update includes the [2.8.7 lookbehind fix](https://github.com/le0pard/re2js/releases/tag/2.8.7)
+and [2.9.1 type declaration correction](https://github.com/le0pard/re2js/releases/tag/2.9.1).
+RE2JS now declares Node.js 20 or later; the local runtime and preview build use
+Node.js 24.20.0. No runtime dependency, major override or SDK change was added.
+
+The live audit changed from 41 affected package entries (4 High, 33 Moderate,
+4 Low) to **39 entries (2 High, 33 Moderate, 4 Low, 0 Critical)**. Distinct
+advisories decreased from 17 to 4. Audit remains non-zero; these are dependency
+findings, not confirmed exploits in the application.
+
+Remaining work is constrained by the upstream packages:
+
+- `zod@3.25.76` is required by Expo CLI. The [advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)
+  names 4.6.6 as fixed, outside the CLI's `^3.25.76` contract.
+- Tooling uses `glob@13.0.6` and `minimatch@3.1.5`/`10.2.6`. The respective
+  [glob](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4) and
+  [minimatch](https://github.com/advisories/GHSA-g3hv-75wg-m249) fixes require newer
+  major versions than those accepted by the installed parents.
+- `deepmerge@4.3.1` is still the latest release and its
+  [advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) lists no fixed version.
+
+Keep these findings visible and reassess supported parent upgrades. The audit's
+suggested Expo 51 downgrade is not an acceptable SDK 55 maintenance change.
+Do not replace all transitive packages with incompatible majors to erase counts.
+
+Validation after the update: complete Firestore/Storage emulator run passed
+282 tests in 35 suites with none skipped; web, Android and iOS exports passed;
+Expo Doctor passed 20/20 checks; `expo install --check` and `npm ls --all` passed.
+These checks do not replace native installation or physical-device acceptance.
 
 ## 27 October Patch Alignment
 
