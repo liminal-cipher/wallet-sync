@@ -18,6 +18,10 @@ the signed-in account. An unconfirmed empty Firestore cache cannot replace them.
 Local snapshot exports remain available during a server outage. Native copies use
 two alternating files and switch the active pointer only after a successful write;
 web copies and images use IndexedDB. Storage failures are displayed to the user.
+If an automatic device copy cannot be saved during a server export, the app
+warns and continues creating the requested file. This does not bypass validation
+of records or required originals. Restores still require their safety copy and
+checkpoint before network writes.
 
 The server stores full pre-edit documents under `coupons/{id}/history/{revision}`.
 The update and its original version commit together. A stale revision fails rather

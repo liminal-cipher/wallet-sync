@@ -26,12 +26,14 @@ export const startCouponNotificationSync = () => {
     const currentGeneration = generation;
     const settings = userId ? await loadReminderSettings(userId) : null;
     if (disposed || currentGeneration !== generation || sequence !== refreshSequence || !userId || !settings) return;
+    // Explicitly disabling reminders does not require a confirmed wallet snapshot.
+    if (settings.enabled && latestCoupons === null) return;
     if (settings.enabled) {
       permissionsReady ||= requestNotificationPermissions();
       await permissionsReady;
     }
-    if (!disposed && currentGeneration === generation && sequence === refreshSequence && userId && latestCoupons !== null) {
-      await reconcileCouponNotifications(userId, latestCoupons, settings);
+    if (!disposed && currentGeneration === generation && sequence === refreshSequence && userId) {
+      await reconcileCouponNotifications(userId, latestCoupons ?? [], settings);
     }
   };
 
@@ -51,6 +53,7 @@ export const startCouponNotificationSync = () => {
         latestCoupons = coupons;
         refresh().catch(reportError);
       }, reportError);
+      refresh().catch(reportError);
     }
   });
 

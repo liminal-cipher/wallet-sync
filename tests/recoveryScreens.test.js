@@ -41,6 +41,15 @@ beforeEach(() => {
   backup.restoreWalletBackup.mockResolvedValue({ added: 0, skipped: 0, preferencesRestored: true });
 });
 afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); renderer = null; });
+
+test("export warnings remain visible without claiming the file was saved", async () => {
+  backup.exportWallet.mockImplementation(async (_format, _originals, _records, _range, _preferences, onWarning) => {
+    onWarning("기기 자동 사본을 저장하지 못했습니다. 파일 내보내기는 계속합니다.");
+  });
+  await mount(React.createElement(Tools, { navigation: { goBack() {} } }));
+  await act(async () => { await button("CSV").props.onPress(); });
+  expect(renderer.root.findAllByType("Text").some((node) => node.props.accessibilityRole === "alert" && node.children.join("").includes("파일 내보내기는 계속"))).toBe(true);
+});
 test("settings-only restore requires opting in and accepting the in-app confirmation", async () => {
   await mount(React.createElement(Tools, { navigation: { goBack() {} } }));
   await act(async () => { await button("백업 파일 선택").props.onPress(); });

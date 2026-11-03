@@ -26,6 +26,30 @@ test("storage failure before checkpoint prevents any restore writes", async () =
   expect(firestore.addCoupon).not.toHaveBeenCalled();
 });
 
+test("a failed pre-restore snapshot still prevents network writes", async () => {
+  local.captureSnapshot.mockRejectedValueOnce(new Error("Storage full"));
+  await expect(restoreRecords([record("one")])).rejects.toThrow("Storage full");
+  expect(firestore.addCoupon).not.toHaveBeenCalled();
+});
+
+test.each(["json", "csv", "pdf"])("native %s export can reach sharing after an automatic snapshot failure", async (format) => {
+  const { Platform } = require("react-native"), print = require("expo-print"), sharing = require("expo-sharing");
+  const files = require("expo-file-system/legacy");
+  Platform.OS = "android";
+  firestore.fetchCoupons.mockResolvedValue([record("native-rescue")]);
+  local.captureSnapshot.mockRejectedValueOnce(new Error("Recovery copy unreadable"));
+  print.printToFileAsync.mockResolvedValue({ uri: "file://rescue.pdf" });
+  sharing.isAvailableAsync.mockResolvedValue(true);
+  const onWarning = jest.fn();
+  try {
+    await exportWallet(format, false, null, null, false, onWarning);
+    expect(sharing.shareAsync).toHaveBeenCalledTimes(1);
+    expect(onWarning).toHaveBeenCalledTimes(1);
+    if (format === "pdf") expect(print.printToFileAsync.mock.calls[0][0].html).toContain("native-rescue");
+    else expect(parseBackup(files.writeAsStringAsync.mock.calls[0][1], format)[0].barcodeNumber).toBe("native-rescue");
+  } finally { Platform.OS = "web"; }
+});
+
 test("native exports cannot open a share sheet after the account changes during file writing", async () => {
   const { Platform } = require("react-native");
   const files = require("expo-file-system/legacy");
@@ -87,6 +111,34 @@ describe("portable export contract", () => {
     jest.runOnlyPendingTimers(); jest.useRealTimers();
     if (originalDocument === undefined) delete global.document; else global.document = originalDocument;
     URL.createObjectURL = originalCreate; URL.revokeObjectURL = originalRevoke;
+  });
+  test.each(["json", "csv"])("%s export survives an automatic snapshot failure and reports a warning", async (format) => {
+    firestore.fetchCoupons.mockResolvedValue([record("rescue-backup")]);
+    local.captureSnapshot.mockRejectedValueOnce(new Error("QuotaExceededError"));
+    const onWarning = jest.fn();
+    await exportWallet(format, false, null, null, false, onWarning);
+    expect(parseBackup(await blob.text(), format)[0].barcodeNumber).toBe("rescue-backup");
+    expect(onWarning).toHaveBeenCalledWith(expect.stringContaining("자동 사본"));
+  });
+  test("a snapshot failure after switching accounts cannot export or report success", async () => {
+    const { auth } = require("../src/services/firebase");
+    firestore.fetchCoupons.mockResolvedValue([record("private-backup")]);
+    local.captureSnapshot.mockImplementationOnce(async () => { auth.currentUser = { uid: "other" }; throw new Error("Storage unavailable"); });
+    const onWarning = jest.fn();
+    try {
+      await expect(exportWallet("csv", false, null, null, false, onWarning)).rejects.toThrow("계정");
+      expect(URL.createObjectURL).not.toHaveBeenCalled();
+      expect(onWarning).not.toHaveBeenCalled();
+    } finally { auth.currentUser = { uid: "owner" }; }
+  });
+  test("a missing original still blocks export after a snapshot warning", async () => {
+    firestore.fetchCoupons.mockResolvedValue([{ ...record("one"), image: { id: "12345678-1234-1234-1234-123456789abc", ownerId: "owner", mime: "image/png" } }]);
+    local.captureSnapshot.mockRejectedValueOnce(new Error("Storage full"));
+    images.imageDataUri.mockRejectedValueOnce(new Error("Original unavailable"));
+    const onWarning = jest.fn();
+    await expect(exportWallet("json", true, null, null, false, onWarning)).rejects.toThrow("Original unavailable");
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(onWarning).toHaveBeenCalledTimes(1);
   });
   test.each(["json", "csv"])("%s exports retain catalogue metadata and can be imported", async (format) => {
     const input = { ...record("00-12 34"), catalogue: catalogue(), image: { id: "12345678-1234-1234-1234-123456789abc", ownerId: "owner", mime: "image/png" } };

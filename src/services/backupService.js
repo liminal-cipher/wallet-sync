@@ -36,7 +36,7 @@ async function shareText(text, extension, mimeType, uid) {
   assertAccount(uid);
   await Sharing.shareAsync(uri, { mimeType, dialogTitle: "쿠폰 백업 저장" });
 }
-export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null, includePreferences = true) {
+export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null, includePreferences = true, onWarning = () => {}) {
   if (!["json", "csv", "pdf"].includes(format)) throw new Error("지원하지 않는 내보내기 형식입니다.");
   const uid = auth.currentUser?.uid;
   assertAccount(uid);
@@ -44,7 +44,14 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
   assertAccount(uid);
   // Validate before JSON serialisation can turn non-finite amounts into null.
   const records = serialise(source.map((record) => ({ ...record, ...normaliseCoupon(record) })));
-  if (sourceRecords === null) await captureSnapshot(uid, records);
+  if (sourceRecords === null) {
+    // An optional device copy must not prevent rescuing data to an external file.
+    try { await captureSnapshot(uid, records); }
+    catch {
+      assertAccount(uid);
+      onWarning("기기 자동 사본을 저장하지 못했습니다. 파일 내보내기는 계속합니다. 파일을 별도 저장소에 보관해 주세요.");
+    }
+  }
   assertAccount(uid);
   const selected = selectBackupRange(records, range);
   if (selected.length > 2000) throw new Error("한 백업은 최대 2000개입니다. 시작·끝 번호를 조정해 나눠 내보내 주세요.");

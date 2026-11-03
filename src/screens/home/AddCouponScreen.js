@@ -15,6 +15,7 @@ import { recogniseImage } from "../../services/ocrService";
 import { parseVoucherText } from "../../utils/voucherParser";
 import { toDay, daysRemaining } from "../../utils/dateUtils";
 import { BARCODE_TYPES, PROVIDERS, normaliseCoupon } from "../../utils/couponModel";
+import { validateCouponDraft } from "../../utils/couponDraft";
 import { barcodeSvg } from "../../utils/barcodes";
 import { Alert } from "../../utils/feedback";
 import useCalendarClock from "../../hooks/useCalendarClock";
@@ -52,10 +53,8 @@ export default function AddCouponScreen({ navigation, route }) {
     setReady(false); setDirty(false); setDraft(null); setRevision(0); setForm(initialForm());
     (async () => {
       const record = id ? await getCoupon(id) : null;
-      const cached = await readLocal(uid, section);
+      const cached = validateCouponDraft(await readLocal(uid, section));
       if (!active) return;
-      if (cached && (!cached.form || typeof cached.form !== "object" || Array.isArray(cached.form) ||
-          !Number.isSafeInteger(cached.revision) || cached.revision < 0)) throw new Error("입력 초안을 읽지 못했습니다. 기존 사본은 유지됩니다.");
       if (record) {
         setForm({ ...initialForm(), ...record, expiryDay: toDay(record.expiryDay || record.expiryDate) || "" });
         setRevision(record.revision || 0);

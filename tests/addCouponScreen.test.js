@@ -48,6 +48,35 @@ test("a malformed draft is preserved and cannot be applied to crash the editor",
   expect(localValues.get("draft:new")).toEqual({ form: null, revision: 0 });
   expect(local.writeLocal).not.toHaveBeenCalled();
 });
+
+test.each([
+  ["numeric timestamp", { savedAt: 123 }],
+  ["invalid timestamp", { savedAt: "not-a-date" }],
+  ["non-text brand", { form: { brand: {} } }],
+  ["non-text OCR input", { form: { catalogueSuggestionText: {} } }],
+  ["invalid catalogue", { form: { catalogue: { schemaVersion: 999 } } }],
+  ["non-text amount buffer", { form: { catalogueMoneyInput: { faceValue: 123 } } }],
+  ["invalid image reference", { form: { image: { id: "broken" } } }],
+])("a draft with %s is rejected without a render failure or overwrite", async (_label, patch) => {
+  const draft = { form: { brand: "" }, revision: 0, savedAt: "2026-11-03T00:00:00.000Z", ...patch };
+  localValues.set("draft:new", draft);
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  expect(button("입력 초안 복원")).toBeUndefined();
+  expect(button("등록하기").props.disabled).toBe(true);
+  expect(renderer.root.findAllByType("Text").some((node) => node.children.join("").includes("초안을 읽지 못했습니다"))).toBe(true);
+  expect(localValues.get("draft:new")).toEqual(draft);
+  expect(local.writeLocal).not.toHaveBeenCalled();
+});
+
+test("unfinished text and amount buffers remain recoverable, including older drafts without a timestamp", async () => {
+  const draft = { revision: 0, form: { brand: "", barcodeNumber: "", expiryDay: "2026-", sourceUrl: "https://", catalogueMoneyInput: { faceValue: "10x" } } };
+  localValues.set("draft:new", draft);
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => button("입력 초안 복원").props.onPress());
+  expect(field("만료일 (YYYY-MM-DD)").props.value).toBe("2026-");
+  expect(field("브랜드·상품명 / 이벤트명").props.value).toBe("");
+  expect(localValues.get("draft:new").form.catalogueMoneyInput.faceValue).toBe("10x");
+});
 test("rapid save taps submit once, and a network failure leaves the draft and input intact", async () => {
   let rejectSave;
   firestore.addCoupon.mockReturnValue(new Promise((_resolve, reject) => { rejectSave = reject; }));

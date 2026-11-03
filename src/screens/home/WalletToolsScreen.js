@@ -71,6 +71,8 @@ export default function WalletToolsScreen({ navigation }) {
     catch (e) { setError(e.message); }
     finally { pending.current = false; setBusy(false); }
   };
+  const exportBackup = (format, originals, records = null) => run(() =>
+    exportWallet(format, originals, records, backupRange(exportFrom, exportTo), exportPreferences, setMessage));
   const prepare = async (input) => {
     if (!input) return;
     setPlan(null);
@@ -108,10 +110,10 @@ export default function WalletToolsScreen({ navigation }) {
       <View style={ui.row}><Text style={ui.label}>JSON에 브랜드 설정 포함</Text><Switch accessibilityLabel="JSON에 브랜드 설정 포함" value={exportPreferences} onValueChange={setExportPreferences} disabled={busy} /></View>
       <Text style={ui.note}>브랜드 설정을 읽지 못해도 이 옵션을 끄면 쿠폰만 JSON으로 보관할 수 있습니다. 기기 사본 내보내기에는 현재 기기의 브랜드 설정이 포함됩니다.</Text>
       <View style={ui.row}>
-        <Button label="JSON + 원본 이미지" disabled={busy} onPress={() => run(() => exportWallet("json", true, null, backupRange(exportFrom, exportTo), exportPreferences))} />
-        <Button label="JSON 정보만" secondary disabled={busy} onPress={() => run(() => exportWallet("json", false, null, backupRange(exportFrom, exportTo), exportPreferences))} />
-        <Button label="CSV" secondary disabled={busy} onPress={() => run(() => exportWallet("csv", false, null, backupRange(exportFrom, exportTo)))} />
-        <Button label="PDF·인쇄" secondary disabled={busy} onPress={() => run(() => exportWallet("pdf", false, null, backupRange(exportFrom, exportTo)))} />
+        <Button label="JSON + 원본 이미지" disabled={busy} onPress={() => exportBackup("json", true)} />
+        <Button label="JSON 정보만" secondary disabled={busy} onPress={() => exportBackup("json", false)} />
+        <Button label="CSV" secondary disabled={busy} onPress={() => exportBackup("csv", false)} />
+        <Button label="PDF·인쇄" secondary disabled={busy} onPress={() => exportBackup("pdf", false)} />
       </View>
       <Text style={ui.heading}>파일에서 추가 복원</Text>
       <Text style={ui.note}>WalletSync JSON·CSV 전체를 검증한 뒤 미리보기를 표시합니다. 기존 쿠폰과 중복되는 바코드는 건너뜁니다. 기존 쿠폰의 삭제·수정은 하지 않습니다.</Text>
@@ -140,8 +142,8 @@ export default function WalletToolsScreen({ navigation }) {
       {copies.map((copy, index) => <View key={`${copy.savedAt}:${index}`} style={ui.card}>
         <Text style={ui.note}>{new Date(copy.savedAt).toLocaleString("ko-KR")} · {copy.records.length}개</Text>
         <Button label="이 사본에서 누락된 쿠폰 복원" secondary disabled={busy} onPress={() => run(() => prepare(validateBackupRecords(copy.records, { localImages: true })))} />
-        <Button label="이 사본 JSON + 원본 내보내기" secondary disabled={busy} onPress={() => run(() => exportWallet("json", true, copy.records, backupRange(exportFrom, exportTo), exportPreferences))} />
-        <Button label="이 사본 JSON 정보만 내보내기" secondary disabled={busy} onPress={() => run(() => exportWallet("json", false, copy.records, backupRange(exportFrom, exportTo), exportPreferences))} />
+        <Button label="이 사본 JSON + 원본 내보내기" secondary disabled={busy} onPress={() => exportBackup("json", true, copy.records)} />
+        <Button label="이 사본 JSON 정보만 내보내기" secondary disabled={busy} onPress={() => exportBackup("json", false, copy.records)} />
       </View>)}
     </>}
     {tab === "trash" && <>

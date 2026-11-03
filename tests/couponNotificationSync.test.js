@@ -64,6 +64,32 @@ test("an unconfirmed empty cache cannot cancel previously scheduled reminders", 
   expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("owner", [], expect.anything());
 });
 
+test("disabling reminders cancels reservations before any confirmed coupon snapshot", async () => {
+  stop = startCouponNotificationSync(); authChanged({ uid: "owner" });
+  subscriptions[0].callback([], { fromCache: true }); await flush();
+  loadReminderSettings.mockResolvedValue({ enabled: false, hour: 9, minute: 0, days: [0] });
+  observeReminderSettings.mock.calls[0][0]("owner"); await flush();
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("owner", [], expect.objectContaining({ enabled: false }));
+  expect(notifications.requestNotificationPermissions).not.toHaveBeenCalled();
+});
+
+test("saved disabled settings are applied on startup without a coupon callback", async () => {
+  loadReminderSettings.mockResolvedValue({ enabled: false, hour: 9, minute: 0, days: [0] });
+  stop = startCouponNotificationSync(); authChanged({ uid: "owner" }); await flush();
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("owner", [], expect.objectContaining({ enabled: false }));
+});
+
+test("a delayed disabled setting cannot cancel the next account's reminders", async () => {
+  let resolveSettings;
+  loadReminderSettings.mockImplementationOnce(() => new Promise((resolve) => { resolveSettings = resolve; }));
+  stop = startCouponNotificationSync(); authChanged({ uid: "owner" }); await flush();
+  authChanged({ uid: "other" });
+  subscriptions[1].callback([{ id: "new" }]); await flush();
+  resolveSettings({ enabled: false, hour: 9, minute: 0, days: [0] }); await flush();
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledTimes(1);
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("other", [{ id: "new" }], expect.objectContaining({ enabled: true }));
+});
+
 test("snapshots reconcile reminders independently of the current screen", async () => {
   stop = startCouponNotificationSync();
   authChanged({ uid: "owner" });

@@ -4,6 +4,32 @@ Review date: 27 October 2026. Scope: repository-owned application code, rules,
 configuration, tests, documentation and asset manifests. Dependencies are inspected
 through their manifests and automated checks, not individually audited.
 
+## 3 November 2026 follow-up
+
+Three additional failure paths were reproduced and corrected:
+
+- Server exports continue with a visible warning if their automatic device copy
+  fails. JSON/CSV output and native JSON/CSV/PDF sharing paths are tested; account
+  changes, missing originals and failed restore safety copies still block the
+  appropriate operation.
+- Disabling reminders reconciles existing reservations even before a coupon
+  snapshot arrives. Saved disabled settings also apply at startup, and delayed
+  settings from a previous account cannot cancel the current account's reminders.
+- `src/utils/couponDraft.js` validates draft metadata and field shapes before the
+  editor renders them. Malformed drafts remain untouched with an error shown;
+  unfinished text, amount buffers and older drafts without a timestamp remain
+  recoverable. Completed-coupon validation still runs on save.
+
+The follow-up adds 20 regression cases across `backupService.test.js`,
+`couponNotificationSync.test.js`, `addCouponScreen.test.js` and
+`recoveryScreens.test.js`. The complete loopback Firestore/Storage suite passes
+**282 tests across 35 suites, with zero skipped**. Native services and screen
+interactions use the existing Jest adapters; these checks do not establish
+physical-device behaviour. Web, Android and iOS exports and the Android
+configuration-only preflight also pass. Exports are bundles, not installed native
+applications; live Firebase configuration and device acceptance remain outstanding.
+The original 27 October record and inventory below remain historical evidence.
+
 ## Feature design
 
 - Wallet overview: counts for usable, expiring, used and expired vouchers; total
