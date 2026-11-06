@@ -50,6 +50,37 @@ requires its own preview variables. Firebase authentication providers, Firestore
 and Storage rules must already support the intended account operations; building
 an APK does not deploy those settings or verify backend access.
 
+## Backend setup
+
+The root `firebase.json` configures the email/password provider used by the app
+and the existing Firestore rules. Review the target project before applying
+either configuration. For the current project:
+
+```powershell
+npx --yes --package=firebase-tools@15.34.0 -- firebase deploy --only auth --project wallet-sync-liminal
+```
+
+This enables email/password sign-in through the
+[Firebase CLI authentication configuration](https://firebase.google.com/docs/auth/configure-providers-cli).
+It does not create an application user. Verify the enabled provider after
+deployment; configuration in the repository alone does not enable sign-in.
+
+Before deploying Firestore rules, create the `(default)` database in Standard
+edition and Native mode, in the selected region. Confirm the region first:
+[Firestore database locations cannot be changed after creation](https://firebase.google.com/docs/firestore/locations).
+Then apply the rules to that same project:
+
+```powershell
+npx --yes --package=firebase-tools@15.34.0 -- firebase deploy --only firestore:rules --project wallet-sync-liminal
+```
+
+Photo storage is a separate setup decision. The SDK's `storageBucket` value does
+not establish that a bucket exists or accepts uploads. Firebase Storage requires
+the [Blaze plan](https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024),
+an actual bucket and the supplied `storage.rules`. Automatic Drive storage is
+not implemented. The root configuration does not deploy Storage resources;
+`firebase.emulator.json` continues to configure both emulators for local tests.
+
 ## Inspect, build and install
 
 ```powershell
