@@ -83,6 +83,34 @@ Google user consent and an app-created folder instead of Firebase Storage.
 The root configuration does not deploy Storage resources;
 `firebase.emulator.json` continues to configure both emulators for local tests.
 
+## Android Drive connection
+
+Enable the Google Drive API in the same Google Cloud project used for the OAuth
+registration. Configure the consent screen and, while testing, include both
+Google accounts as test users. Register an **Android** OAuth client with
+`com.liminalcipher.walletsync` and the SHA-1 fingerprint of the existing EAS
+signing certificate. Keep its public client ID in
+`expo.extra.googleDriveAndroidClientId` in `app.json` for configuration checks.
+Google's native [AuthorizationClient](https://developer.android.com/identity/authorization)
+identifies the installed app through its package and signature; the ID is not a
+client secret and is not passed as a web OAuth client ID.
+
+The local `modules/wallet-drive-auth` Expo module requests only `drive.file`.
+It needs a rebuilt Android APK and is unavailable in Expo Go, iOS and web.
+Service account keys and custom URI schemes are not used.
+
+After installation, sign in to WalletSync and open the intended personal or
+shared wallet. Under **보관·복원·알림 → Drive 연결·원본 보관·백업**, connect
+your Google account. For a shared wallet, the wallet owner creates the storage
+folder and opens it in Drive to grant the other Google account editor access.
+The other person connects their own Google account and chooses **공유·보관 폴더
+접근 확인**. Use **이 기기의 미보관 원본 업로드** on the phone holding existing
+originals. Confirm that the other phone can open a newly uploaded image, then
+save a JSON backup with originals and verify its restore preview.
+
+Wallet membership and Google sharing are separate. See
+[Shared Wallets](shared-wallets.md) for permission and recovery boundaries.
+
 ## Inspect, build and install
 
 ```powershell
@@ -92,7 +120,7 @@ npm run build:android:preview
 ```
 
 Use a new output directory for each archive inspection. Check that it contains
-the application source, assets, plugins, scripts and build configuration, with no
+the application source, assets, plugins, local modules, scripts and build configuration, with no
 environment files, signing material, logs or local working files. `.easignore`
 uses an allowlist; add any future required root configuration files deliberately.
 
