@@ -37,7 +37,7 @@ async function shareText(text, extension, mimeType, uid, scope) {
   assertAccount(uid, scope);
   await Sharing.shareAsync(uri, { mimeType, dialogTitle: "쿠폰 백업 저장" });
 }
-export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null, includePreferences = true, onWarning = () => {}) {
+export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null, includePreferences = true, onWarning = () => {}, destination = null) {
   if (!["json", "csv", "pdf"].includes(format)) throw new Error("지원하지 않는 내보내기 형식입니다.");
   const uid = auth.currentUser?.uid;
   const scope = getWalletScope(uid);
@@ -77,6 +77,7 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
     const text = JSON.stringify({ app: "wallet-sync", version: BACKUP_VERSION, exportedAt: new Date().toISOString(), source: sourceRecords === null ? "server" : "local-snapshot", records: portable, brandPreferences }, null, 2);
     // Validate our own size/format before offering an unusable backup.
     parseBackup(text, "json");
+    if (destination) { assertAccount(uid, scope); return destination(text); }
     return shareText(text, "json", "application/json", uid, scope);
   }
   const html = `<html><head><meta charset="utf-8"><style>body{font-family:sans-serif}article{page-break-inside:avoid;border:1px solid #ccc;padding:18px;margin:20px}svg{max-width:100%;height:100px}p{white-space:pre-wrap;word-break:break-all}</style></head><body><h1>WalletSync</h1>${portable.map((record) => {

@@ -1,6 +1,7 @@
 jest.mock("react-native", () => ({ Platform: { OS: "ios" } }));
-jest.mock("expo-file-system/legacy", () => ({ documentDirectory: "file://documents/", EncodingType: { Base64: "base64" }, getInfoAsync: jest.fn(), readAsStringAsync: jest.fn() }));
-jest.mock("expo-crypto", () => ({ CryptoDigestAlgorithm: { SHA256: "sha256" }, digestStringAsync: async (_type, text) => require("crypto").createHash("sha256").update(text).digest("hex") }));
+jest.mock("expo-file-system/legacy", () => ({ documentDirectory: "file://documents/", EncodingType: { Base64: "base64" }, getInfoAsync: jest.fn(), readAsStringAsync: jest.fn(), makeDirectoryAsync: jest.fn(), writeAsStringAsync: jest.fn() }));
+jest.mock("expo-crypto", () => ({ CryptoDigestAlgorithm: { SHA256: "sha256" }, digestStringAsync: async (_type, text) => require("crypto").createHash("sha256").update(text).digest("hex"),
+  digest: async (_type, bytes) => new Uint8Array(require("crypto").createHash("sha256").update(bytes).digest()).buffer }));
 jest.mock("firebase/storage", () => ({ getStorage: jest.fn(() => ({})), ref: jest.fn((_storage, path) => path), getBytes: jest.fn(), getMetadata: jest.fn(), uploadString: jest.fn() }));
 jest.mock("../src/services/firebase", () => ({ auth: { currentUser: { uid: "owner" } } }));
 const storage = require("firebase/storage");
@@ -63,4 +64,22 @@ test("already-cloud-backed images still enforce the signed-in owner", async () =
 test("a late original read cannot return the previous account's image", async () => {
   files.readAsStringAsync.mockImplementationOnce(async () => { auth.currentUser = { uid: "other" }; return "YWJj"; });
   await expect(imageDataUri(image)).rejects.toThrow("계정");
+});
+
+test("a damaged cached Drive image is replaced only by verified remote content", async () => {
+  const drive = require("../src/services/driveService");
+  const backed = { ...image, drive: { fileId: "file-fixture-001", folderId: "folder-fixture-001", size: 3, sha256: require("crypto").createHash("sha256").update("abc").digest("hex") } };
+  const read = jest.spyOn(drive, "readDriveOriginal").mockResolvedValue("data:image/png;base64,YWJj");
+  files.readAsStringAsync.mockResolvedValueOnce("ZGVm");
+  await expect(imageDataUri(backed)).resolves.toBe("data:image/png;base64,YWJj");
+  expect(read).toHaveBeenCalledWith(backed);
+  expect(files.writeAsStringAsync).toHaveBeenCalledWith(expect.any(String), "YWJj", expect.any(Object));
+  read.mockRestore();
+});
+test("an intact Drive cache remains usable without a Google network request", async () => {
+  const drive = require("../src/services/driveService");
+  const backed = { ...image, drive: { fileId: "file-fixture-001", folderId: "folder-fixture-001", size: 3, sha256: require("crypto").createHash("sha256").update("abc").digest("hex") } };
+  const read = jest.spyOn(drive, "readDriveOriginal");
+  await expect(imageDataUri(backed)).resolves.toBe("data:image/png;base64,YWJj");
+  expect(read).not.toHaveBeenCalled(); read.mockRestore();
 });

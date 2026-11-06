@@ -108,6 +108,7 @@ export default function WalletToolsScreen({ navigation }) {
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     {!!message && <Text accessibilityRole="alert" style={ui.note}>{message}</Text>}
     {tab === "backup" && <>
+      <Button label="Drive 연결·원본 보관·백업" secondary disabled={busy} onPress={() => navigation.navigate("Drive")} />
       <Text style={ui.heading}>파일로 내보내기</Text>
       <Text style={ui.note}>JSON은 휴지통·즐겨찾기·최근 선택과 선택한 원본 이미지를 포함하는 복원용 백업입니다. CSV는 쿠폰 정보만, PDF는 열람·인쇄용입니다. 파일에는 사용 가능한 바코드가 들어 있으므로 개인 저장소에 보관하세요.</Text>
       <Field label="내보내기 시작 번호 (만료일순·휴지통 포함)" value={exportFrom} onChangeText={setExportFrom} keyboardType="numeric" editable={!busy} />

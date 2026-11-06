@@ -143,7 +143,7 @@ export default function AddCouponScreen({ navigation, route }) {
       catch { Alert.alert("저장 완료", "쿠폰은 저장됐지만 기기 초안을 정리하지 못했습니다. 같은 쿠폰은 중복 등록되지 않습니다."); }
       assertWalletScope(scope);
       if (uploaded.localOnly) Alert.alert(scope.walletId ? "사진 원본은 별도 보관" : "원본은 이 기기에 보관됨", scope.walletId
-        ? "쿠폰은 저장됐습니다. 공유 사진은 등록한 기기에서만 볼 수 있습니다. 사진을 등록한 기기에서 원본 포함 JSON 백업을 따로 보관해 주세요."
+        ? "쿠폰은 저장됐습니다. Drive 원본 보관은 아직 완료되지 않았습니다. 사진을 등록한 기기에서 보관·복원 → Drive를 열어 원본 업로드를 다시 시도해 주세요. 등록한 기기의 원본은 유지됩니다."
         : "쿠폰은 저장됐습니다. 원본 이미지의 클라우드 보관은 확인하지 못했습니다. 보관·복원에서 이미지 포함 JSON 백업을 별도로 저장해 주세요.");
       navigation.goBack();
     } catch (e) { setError(e.message); }

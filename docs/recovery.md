@@ -101,15 +101,29 @@ file again. A retry remains safe because identity reservations are transactional
 ## Originals and OCR
 
 Image selection first copies the original into durable device storage without
-cropping or recompressing it. Saving a personal coupon attempts an authenticated upload under
-`originals/{userId}/{imageId}`. URLs with public download tokens are not stored.
+cropping or recompressing it. A connected Drive account is used for new personal
+originals; otherwise personal saves attempt authenticated Firebase Storage under
+`originals/{userId}/{imageId}`. Shared originals use Drive. URLs with public download
+tokens are not stored.
 Originals are immutable, so older coupon versions can still reference their image.
 Detaching or replacing an image does not delete an earlier original.
 
-Shared originals are currently device-only. Drive integration is pending, so the
-other member cannot yet view those originals on another device. Export originals
-from the device holding them. Imports skip duplicate coupons and do not fill
-missing images on existing shared records.
+Android originals can be uploaded through **보관·복원·알림 → Drive** after Google
+consent and folder access verification. Local originals are retained, including
+when upload or coupon-reference saving fails. The app can retry existing unbacked
+images and keeps their prior coupon revisions. A second member needs their own
+Google consent and editor access to the app-created folder. Real cross-account
+access and device behaviour remain acceptance checks; see [Shared Wallets](shared-wallets.md).
+Imports skip duplicate coupons and do not fill missing images on existing records.
+
+The Drive screen can also save dated JSON backups, list the newest 100, verify
+their hashes and prepare the existing additive-restore preview. It retains the
+last prepared backup locally before upload and can retransmit the same bytes
+using the same reserved file ID. Backups do not overwrite each other or remove
+older Drive files. Drive backups omit brand preferences; local JSON exports retain
+their existing preference controls. Revision history remains outside portable
+JSON. A missing original fails an original-inclusive backup. These are explicit
+user-triggered backups, not a scheduled background backup service.
 
 Firebase Storage must be configured with the actual bucket and the supplied
 `storage.rules`. Web byte downloads require bucket CORS settings as described in

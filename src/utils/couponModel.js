@@ -1,6 +1,7 @@
 import { toDay } from "./dateUtils";
 import { normaliseCatalogueMetadata } from "./catalogueModel";
 import { safeSourceUrl } from "./sourceUrl";
+import { validateDriveReference } from "./driveData";
 export { safeSourceUrl } from "./sourceUrl";
 
 export const BARCODE_TYPES = ["code128", "code39", "ean13", "ean8", "qr", "upc_a", "upc_e"];
@@ -41,7 +42,9 @@ export function validateImage(image) {
       !/^[A-Za-z0-9_-]{1,128}$/.test(image.ownerId) || !["image/jpeg", "image/png", "image/webp"].includes(image.mime) ||
       (image.cloudPath && image.cloudPath !== `originals/${image.ownerId}/${image.id}`)) throw new Error("원본 이미지 참조가 올바르지 않습니다.");
   if (image.walletId !== undefined && (typeof image.walletId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(image.walletId) || image.cloudPath)) throw new Error("공유 원본 이미지 참조가 올바르지 않습니다.");
+  if (image.drive && image.cloudPath) throw new Error("원본의 보관 위치를 확인해 주세요.");
   return { id: image.id, ownerId: image.ownerId, mime: image.mime, cloudPath: image.cloudPath || null,
+    ...(image.drive ? { drive: validateDriveReference(image.drive) } : {}),
     ...(image.walletId ? { walletId: image.walletId } : {}) };
 }
 // Use the original payload, including spaces and hyphens, as the voucher identity.

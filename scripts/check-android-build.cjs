@@ -31,6 +31,7 @@ function configurationErrors(app, eas) {
   const errors = [];
   if (!/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/.test(app.expo?.android?.package || "")) errors.push("Configure android.package in app.json");
   if (!Number.isSafeInteger(app.expo?.android?.versionCode) || app.expo.android.versionCode < 1) errors.push("Configure a positive android.versionCode");
+  if (!/^\d+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(app.expo?.extra?.googleDriveAndroidClientId || "")) errors.push("Configure the public Android Drive OAuth client ID");
   const preview = eas.build?.preview;
   if (preview?.android?.buildType !== "apk" || preview.distribution !== "internal" || preview.developmentClient !== false || preview.environment !== "preview") {
     errors.push("Configure a standalone internal APK in the preview build environment");

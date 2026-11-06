@@ -7,6 +7,9 @@ import { validateImage } from "../utils/couponModel";
 import { MAX_IMAGE_BYTES, originalByteLength } from "../utils/inputLimits";
 import { openLocalDatabase } from "./localDatabase";
 import { getWalletScope, assertWalletScope } from "./walletSession";
+import { loadDriveConnection, uploadDriveOriginal, readDriveOriginal } from "./driveService";
+import { imageBytes } from "../utils/driveData";
+import { bytesHash } from "../utils/driveHash";
 
 export { MAX_IMAGE_BYTES } from "../utils/inputLimits";
 const imageDb = () => openLocalDatabase("wallet-sync-images", "images");
@@ -57,7 +60,7 @@ function requireImage(image) {
 async function remoteBytes(image) {
   requireImage(image);
   if (!image.cloudPath) throw new Error(image.walletId
-    ? "이 기기에 공유 사진 원본이 없습니다. 사진을 등록한 기기에서 확인하고 원본 포함 JSON 백업을 보관해 주세요."
+    ? "이 기기에 공유 사진 원본이 없습니다. 등록한 기기에서 Drive 원본 보관을 완료하거나 원본 포함 JSON 백업을 보관해 주세요."
     : "이 기기에 원본이 없습니다. 이미지가 포함된 JSON 백업을 복원해 주세요.");
   const storage = getStorage();
   storage.maxOperationRetryTime = 15000;
@@ -73,21 +76,32 @@ export async function imageDataUri(image) {
     if ((await FileSystem.getInfoAsync(localUri(image))).exists) {
       const content = await FileSystem.readAsStringAsync(localUri(image), { encoding: FileSystem.EncodingType.Base64 });
       assertCurrent();
-      return `data:${image.mime};base64,${content}`;
+      const uri = `data:${image.mime};base64,${content}`;
+      if (await matchesDriveCopy(image, uri)) { assertCurrent(); return uri; }
+    }
+    if (image.drive) {
+      const uri = await readDriveOriginal(image); assertCurrent();
+      const directory = `${FileSystem.documentDirectory}originals/${encodeURIComponent(image.ownerId)}/`;
+      try {
+        await FileSystem.makeDirectoryAsync(directory, { intermediates: true }); assertCurrent();
+        await FileSystem.writeAsStringAsync(localUri(image), uri.split(",")[1], { encoding: FileSystem.EncodingType.Base64 });
+      } catch { assertCurrent(); } // A verified remote original remains usable if its cache cannot be written.
+      assertCurrent(); return uri;
     }
     // React Native cannot construct Blob(ArrayBuffer); encode authenticated bytes
     // directly instead of losing cross-device originals at that boundary.
     const bytes = await remoteBytes(image);
     assertCurrent();
     let binary = "";
-    for (let offset = 0; offset < bytes.length; offset += 16384) binary += String.fromCharCode(...bytes.subarray(offset, offset + 16384));
+    for (let offset = 0; offset < bytes.length; offset += 2048) binary += String.fromCharCode(...bytes.subarray(offset, offset + 2048));
     return `data:${image.mime};base64,${btoa(binary)}`;
   }
   let local;
   try { local = await webStore(`${image.ownerId}/${image.id}`); }
-  catch (error) { if (!image.cloudPath) throw error; }
+  catch (error) { if (!image.cloudPath && !image.drive) throw error; }
+  if (!local && image.drive) { const uri = await readDriveOriginal(image); assertCurrent(); return uri; }
   const blob = local || new Blob([await remoteBytes(image)], { type: image.mime });
-  return new Promise((resolve, reject) => {
+  const uri = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       try { assertCurrent(); resolve(reader.result); } catch (error) { reject(error); }
@@ -95,13 +109,26 @@ export async function imageDataUri(image) {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+  if (!await matchesDriveCopy(image, uri)) { const remote = await readDriveOriginal(image); assertCurrent(); return remote; }
+  assertCurrent(); return uri;
+}
+async function matchesDriveCopy(image, uri) {
+  if (!image.drive) return true;
+  try { const bytes = imageBytes(uri); return bytes.length === image.drive.size && await bytesHash(bytes) === image.drive.sha256; }
+  catch { return false; }
 }
 export async function uploadOriginal(image) {
   if (!image) return { image: null, localOnly: false };
   requireImage(image);
   const scope = getWalletScope(auth.currentUser.uid);
-  // Shared originals await the Drive adapter; never send them to a private bucket.
-  if (image.walletId) return { image, localOnly: true };
+  if (image.drive) return { image, localOnly: false };
+  if (image.walletId || await loadDriveConnection().catch(() => null)) {
+    try {
+      const dataUri = await imageDataUri(image); assertWalletScope(scope);
+      const drive = await uploadDriveOriginal(image, dataUri); requireImage(image); assertWalletScope(scope);
+      return { image: { ...image, cloudPath: null, drive }, localOnly: false };
+    } catch { return { image, localOnly: true }; }
+  }
   if (image.cloudPath) return { image, localOnly: false };
   try {
     requireImage(image);

@@ -62,25 +62,43 @@ a conflict disappear. History and trash have no client-side permanent deletion.
 These protections address application writes; they do not protect against every
 administrator action, account loss or device failure. Independent external
 backups remain necessary. Current portable backups omit revision history, and
-shared originals still require the Drive work described below.
+shared originals require the Drive setup and device verification described below.
 
 ## Image and Deployment Status
 
-Shared image references include `walletId`. Their originals remain on the device
-that retained them. Shared saves do not upload to the private Firebase Storage
-path. Shared cross-device image viewing and Google Drive OAuth/upload/download
-are **not implemented**. A JSON import skips existing coupons, so importing a
-backup is not a way to attach a missing image to an existing shared coupon.
-Original-inclusive export fails if any selected original is unavailable.
+Shared image references include `walletId`. The Android Drive adapter retains
+device originals, uploads them under pre-generated file IDs, and checks the file
+size, parent, MIME type and SHA-256 before adding the Drive reference to a coupon.
+An upload checkpoint is persisted before writing bytes. Retrying a lost reply
+checks the same ID; different content is rejected and existing files are not
+overwritten or deleted. If checksum metadata is absent, the adapter downloads and
+verifies the bytes. Downloads also verify their content before display/cache.
+Shared saves never upload to the private Firebase Storage path.
 
-The intended Drive design uses each person's own Google account and an ordinary
-folder shared between them. Folder sharing is separate from WalletSync membership;
-the future adapter must coordinate both permissions and test access by both
-accounts. Google documents [folder permission inheritance](https://developers.google.com/workspace/drive/api/guides/manage-sharing)
-and recommends the limited [`drive.file` scope](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
-OAuth clients, consent configuration, native account authorisation, shared-file
-access and account migration still need implementation and live verification.
-No billing account or Storage bucket is required by this local metadata feature.
+In **보관·복원·알림 → Drive**, each person connects their own Google account.
+The wallet owner creates an app-managed ordinary Drive folder, then uses Drive's
+sharing controls to give the other Google account editor access. The other member
+checks folder access in the app. Google documents [folder permission inheritance](https://developers.google.com/workspace/drive/api/guides/manage-sharing)
+and the limited [`drive.file` scope](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
+Google folder sharing and WalletSync membership are independent: removing a wallet
+member does not revoke their Drive permissions or copies they already downloaded.
+Remove Google folder sharing separately when ending collaboration.
+
+Only the wallet owner can reserve its folder setting; the setting cannot be
+overwritten or deleted by a client. A failed folder creation reuses the reserved
+ID. Access tokens stay in memory; local connection metadata contains only the
+Google email, display name and permission ID. Account, wallet and connection
+changes invalidate pending results. The native adapter requests consent only
+after an explicit user action and does not use a custom URI scheme or client secret.
+
+The Android client registration and signing key are configured, but real OAuth
+consent, cross-account folder access and physical-device behaviour still require
+verification. iOS/web Drive authorisation and automatic account/folder migration
+are not implemented. Existing originals are not moved by changing Google accounts;
+the newly connected account needs access to the existing folder. Portable JSON
+with originals can be imported into another account/wallet, adding only missing
+coupons. It does not fill missing images on existing duplicates. Use **이 기기의
+미보관 원본 업로드** on the device holding those originals.
 
 Deploy the tested `firestore.rules` to the intended Firebase project before using
 shared wallets against that project. Local emulator results do not establish

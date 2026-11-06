@@ -14,6 +14,8 @@
 !/assets/**
 !/plugins
 !/plugins/**
+!/modules
+!/modules/**
 !/scripts
 !/scripts/**
 

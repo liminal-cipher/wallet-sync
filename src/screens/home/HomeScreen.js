@@ -250,8 +250,8 @@ export default function HomeScreen() {
 
         <Text style={styles.expiryText}>만료일: {formattedDate}</Text>
         {item.catalogue && <CatalogueDetails record={item} />}
-        {item.image && !item.image.cloudPath && <Text style={ui.note}>{item.image.walletId
-          ? "공유 사진은 현재 등록한 기기에서만 볼 수 있습니다. 사진을 등록한 기기에서 원본 포함 JSON 백업을 보관해 주세요."
+        {item.image && !item.image.cloudPath && !item.image.drive && <Text style={ui.note}>{item.image.walletId
+          ? "Drive 원본 보관이 아직 완료되지 않았습니다. 사진을 등록한 기기에서 보관·복원 → Drive를 열어 원본을 업로드해 주세요."
           : "원본은 등록한 기기에 보관돼 있습니다. 수정 후 저장하면 클라우드 보관을 다시 시도합니다."}</Text>}
         {item.kind !== "external" && !!item.conditions && <Text style={ui.note}>{item.conditions}</Text>}
         <View style={ui.row}>

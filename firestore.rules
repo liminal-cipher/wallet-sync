@@ -23,6 +23,17 @@ service cloud.firestore {
                             && request.resource.data.keys().hasOnly(['walletId'])
                             && userId in getAfter(/databases/$(database)/documents/wallets/$(request.resource.data.walletId)).data.memberIds;
     }
+    function validDriveFolder(data) {
+      return data.keys().hasOnly(['version', 'folderId', 'ownerPermissionId', 'createdBy', 'createdAt'])
+             && data.version == 1 && data.folderId is string && data.folderId.matches('^[A-Za-z0-9_-]{10,200}$')
+             && data.ownerPermissionId is string && data.ownerPermissionId.matches('^[0-9]{1,100}$')
+             && data.createdBy == request.auth.uid && data.createdAt is timestamp;
+    }
+    match /users/{userId}/settings/drive {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() && request.auth.uid == userId && validDriveFolder(request.resource.data);
+      allow update, delete: if false;
+    }
     match /wallets/{walletId} {
       allow read: if member(walletId);
       allow create: if signedIn() && validWallet(request.resource.data)
@@ -54,6 +65,13 @@ service cloud.firestore {
                       || joining()
                     );
       allow delete: if false;
+      match /settings/drive {
+        allow read: if member(walletId);
+        allow create: if member(walletId)
+                      && get(/databases/$(database)/documents/wallets/$(walletId)).data.ownerId == request.auth.uid
+                      && validDriveFolder(request.resource.data);
+        allow update, delete: if false;
+      }
       match /couponKeys/{key} {
         allow read, write: if member(walletId);
       }

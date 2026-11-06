@@ -77,6 +77,7 @@ export default function SharedWalletScreen({ navigation }) {
       onPress={() => run(clearUnavailableWalletLink)} />}
     <Button label="개인 쿠폰함 열기" secondary disabled={busy} onPress={() => select(null)} />
     <Text style={ui.note}>기존 개인 쿠폰은 자동으로 공유되지 않습니다. 백업 파일로 원하는 쿠폰을 공유 쿠폰함에 추가 복원할 수 있습니다.</Text>
-    <Text style={ui.note}>현재 공유 쿠폰의 사진 원본은 등록한 기기에서만 볼 수 있습니다. Drive 자동 연결은 아직 지원하지 않습니다. 사진을 등록한 기기에서 원본 포함 JSON을 따로 보관해 주세요.</Text>
+    <Text style={ui.note}>사진 원본을 함께 보려면 각자 Drive 계정을 연결하고 같은 보관 폴더에 접근할 수 있어야 합니다. 원본 업로드가 끝나기 전에는 등록한 기기에만 보관됩니다. 쿠폰함 참여 해제와 Drive 폴더 공유 해제는 별도로 관리해 주세요.</Text>
+    <Button label="Drive 연결·원본 보관" secondary onPress={() => navigation.navigate("Drive")} />
   </Page>;
 }

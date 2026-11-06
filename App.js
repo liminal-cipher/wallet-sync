@@ -8,6 +8,7 @@ import { startCouponNotificationSync } from "./src/services/couponNotificationSy
 import { getWalletScope, observeWalletScope, setActiveWallet } from "./src/services/walletSession";
 import { startWalletSession } from "./src/services/sharedWalletService";
 import SharedWalletScreen from "./src/screens/home/SharedWalletScreen";
+import DriveScreen from "./src/screens/home/DriveScreen";
 
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import RegisterScreen from "./src/screens/auth/RegisterScreen";
@@ -67,6 +68,7 @@ export default function App() {
           <Stack.Screen name="WalletTools" component={WalletToolsScreen} options={{ headerShown: false }} />
           <Stack.Screen name="CouponHistory" component={CouponHistoryScreen} options={{ headerShown: false }} />
           <Stack.Screen name="SharedWallet" component={SharedWalletScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Drive" component={DriveScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       ) : (
         <Stack.Navigator>

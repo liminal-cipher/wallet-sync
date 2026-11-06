@@ -55,6 +55,7 @@
       ]
     ],
     "extra": {
+      "googleDriveAndroidClientId": "1069904449719-ohtjcfjdk1hi0gf7d0t0s4ahcm16cmbe.apps.googleusercontent.com",
       "eas": {
         "projectId": "213483bd-04bc-4256-977a-4300d56de94a"
       }

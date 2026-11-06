@@ -54,6 +54,18 @@ integration("two-person shared wallets", () => {
   });
   beforeEach(async () => { mockBeforeCommit = null; mockLoseCommitReply = false; await environment.clearFirestore(); await signIn("owner"); });
   afterAll(async () => { setActiveWallet(null); await environment?.cleanup(); });
+  test("shared Drive settings are owner-created, member-readable and retained on removal", async () => {
+    const id = await create();
+    const record = { version: 1, folderId: "folder-fixture-001", ownerPermissionId: "12345", createdBy: "owner", createdAt: new Date() };
+    await setDoc(doc(mockDb, "wallets", id, "settings", "drive"), record);
+    await inviteGuest(id);
+    expect((await getDoc(doc(mockDb, "wallets", id, "settings", "drive"))).data().folderId).toBe(record.folderId);
+    await expect(updateDoc(doc(mockDb, "wallets", id, "settings", "drive"), { folderId: "different-folder" })).rejects.toMatchObject({ code: "permission-denied" });
+    await wallets.removeWalletMember(id);
+    await expect(getDoc(doc(mockDb, "wallets", id, "settings", "drive"))).rejects.toMatchObject({ code: "permission-denied" });
+    await signIn("owner", id);
+    expect((await getDoc(doc(mockDb, "wallets", id, "settings", "drive"))).data().folderId).toBe(record.folderId);
+  });
   test("own accounts share use state, history and trash without exposing personal coupons", async () => {
     await coupons.addCoupon(input("private"));
     const id = await create();

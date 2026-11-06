@@ -79,4 +79,14 @@ rulesTests("Firestore coupon ownership", () => {
     await assertFails(getDoc(doc(anonymous, "coupons", "coupon-1")));
     await assertFails(setDoc(doc(anonymous, "coupons", "new"), { userId: "owner" }));
   });
+  test("Drive folder reservations belong to the account and cannot be overwritten", async () => {
+    const record = { version: 1, folderId: "folder-fixture-001", ownerPermissionId: "12345", createdBy: "owner", createdAt: new Date() };
+    const ref = doc(owner, "users", "owner", "settings", "drive");
+    await assertSucceeds(setDoc(ref, record));
+    await assertSucceeds(getDoc(ref));
+    await assertFails(getDoc(doc(other, "users", "owner", "settings", "drive")));
+    await assertFails(updateDoc(ref, { folderId: "replacement-folder" }));
+    await assertFails(deleteDoc(ref));
+    await assertFails(setDoc(doc(other, "users", "other", "settings", "drive"), record));
+  });
 });

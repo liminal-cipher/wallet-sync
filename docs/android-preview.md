@@ -78,8 +78,9 @@ npx --yes --package=firebase-tools@15.34.0 -- firebase deploy --only firestore:r
 Photo storage is a separate setup decision. The SDK's `storageBucket` value does
 not establish that a bucket exists or accepts uploads. Firebase Storage requires
 the [Blaze plan](https://firebase.google.com/docs/storage/faqs-storage-changes-announced-sept-2024),
-an actual bucket and the supplied `storage.rules`. Automatic Drive storage is
-not implemented. The root configuration does not deploy Storage resources;
+an actual bucket and the supplied `storage.rules`. Android Drive storage uses
+Google user consent and an app-created folder instead of Firebase Storage.
+The root configuration does not deploy Storage resources;
 `firebase.emulator.json` continues to configure both emulators for local tests.
 
 ## Inspect, build and install
