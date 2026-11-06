@@ -15,6 +15,7 @@ const Notifications = require("expo-notifications");
 const { Platform } = require("react-native");
 const { Timestamp } = require("firebase/firestore");
 const service = require("../src/services/notificationService");
+const { setActiveWallet } = require("../src/services/walletSession");
 const foregroundHandler = Notifications.setNotificationHandler.mock.calls[0][0];
 let scheduled;
 const coupon = (overrides = {}) => ({
@@ -24,6 +25,7 @@ const coupon = (overrides = {}) => ({
 });
 
 beforeEach(() => {
+  setActiveWallet("owner");
   jest.clearAllMocks();
   jest.useFakeTimers().setSystemTime(new Date(2026, 9, 17, 12));
   Platform.OS = "android";
@@ -39,7 +41,17 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => jest.useRealTimers());
+afterEach(() => { jest.useRealTimers(); setActiveWallet(null); });
+
+test("shared reminders include the other member's coupons and exclude private records", async () => {
+  setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner", "guest"] });
+  await service.reconcileCouponNotifications("owner", [coupon({ walletId: "shared", userId: "guest" }), coupon({ id: "private" })]);
+  expect(scheduled.size).toBe(3);
+  for (const request of scheduled.values()) expect(request.content.data).toMatchObject({ walletId: "shared", couponId: "coupon-1", userId: "owner" });
+  setActiveWallet("owner"); await service.reconcileCouponNotifications("owner", [coupon({ id: "private" })]);
+  expect(scheduled.size).toBe(3);
+  for (const request of scheduled.values()) expect(request.content.data.couponId).toBe("private");
+});
 
 test("expiry reminders use typed date triggers at 09:00 on D-7, D-3 and D-Day", async () => {
   await service.reconcileCouponNotifications("owner", [coupon()]);

@@ -4,7 +4,7 @@
 
 | Situation | Path | Boundary |
 | --- | --- | --- |
-| An unsaved form or failed save | Reopen the editor and choose the saved input draft | Per account and coupon, on that device only |
+| An unsaved form or failed save | Reopen the editor and choose the saved input draft | Per account, wallet and coupon, on that device only |
 | Accidental removal | Open **보관·복원·알림 → 휴지통** and restore the coupon | Trash is not automatically purged |
 | Incorrect edit or used-state change | Open **수정 이력** and restore an earlier version | Starts with changes made by this client; restoration also archives the current state |
 | Missing server records | Restore missing coupons from an automatic device snapshot or a JSON/CSV file | Existing identities, including trashed coupons, are skipped |
@@ -14,7 +14,7 @@
 
 Automatic snapshots record confirmed server results, retain five recent distinct
 states and preserve a non-empty recovery copy when appropriate. They are scoped to
-the signed-in account. An unconfirmed empty Firestore cache cannot replace them.
+the signed-in account and selected wallet. An unconfirmed empty Firestore cache cannot replace them.
 Local snapshot exports remain available during a server outage. Native copies use
 two alternating files and switch the active pointer only after a successful write;
 web copies and images use IndexedDB. Storage failures are displayed to the user.
@@ -23,7 +23,9 @@ warns and continues creating the requested file. This does not bypass validation
 of records or required originals. Restores still require their safety copy and
 checkpoint before network writes.
 
-The server stores full pre-edit documents under `coupons/{id}/history/{revision}`.
+The server stores full pre-edit documents under `coupons/{id}/history/{revision}`
+for personal coupons and `wallets/{walletId}/coupons/{id}/history/{revision}` for
+shared coupons. See [Shared Wallets](shared-wallets.md) for membership boundaries.
 The update and its original version commit together. A stale revision fails rather
 than overwriting another device's changes. Security rules prevent client-side
 permanent deletion or modification of archived versions. Administrators still
@@ -64,7 +66,7 @@ Changing accounts does not expose another account's device copies through the UI
 Local copies are retained on sign-out so signing back in can recover them.
 
 An import is fully validated before its preview appears. It adds records to the
-currently signed-in account and ignores any original account or document ID.
+currently selected wallet and ignores any original account or document ID.
 Duplicate barcode payload/symbology pairs and exact duplicate external events are
 skipped, including duplicates within the file. Existing records are never replaced.
 Trashed records stay in trash; restore them separately to make them active.
@@ -84,7 +86,7 @@ If settings or final checkpoint storage fails after coupons were added, retrying
 the same input skips existing coupons and merges settings idempotently. Replacing
 an interrupted input retains its predecessor under **직전 복원 입력 다시 열기**.
 Unknown checkpoint versions are preserved and rejected rather than overwritten.
-Account changes invalidate a prepared restore; select the backup again.
+Account or wallet changes invalidate a prepared restore; select the backup again.
 
 Limits are 2,000 records, 50 MiB per input file, 10 MiB per original and 35 MiB of
 embedded originals per JSON backup. Oversized exports fail explicitly. Use smaller
@@ -99,10 +101,15 @@ file again. A retry remains safe because identity reservations are transactional
 ## Originals and OCR
 
 Image selection first copies the original into durable device storage without
-cropping or recompressing it. Saving then attempts an authenticated upload under
+cropping or recompressing it. Saving a personal coupon attempts an authenticated upload under
 `originals/{userId}/{imageId}`. URLs with public download tokens are not stored.
 Originals are immutable, so older coupon versions can still reference their image.
 Detaching or replacing an image does not delete an earlier original.
+
+Shared originals are currently device-only. Drive integration is pending, so the
+other member cannot yet view those originals on another device. Export originals
+from the device holding them. Imports skip duplicate coupons and do not fill
+missing images on existing shared records.
 
 Firebase Storage must be configured with the actual bucket and the supplied
 `storage.rules`. Web byte downloads require bucket CORS settings as described in

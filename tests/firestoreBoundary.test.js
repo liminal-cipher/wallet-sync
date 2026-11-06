@@ -7,7 +7,9 @@ const sdk = require("firebase/firestore");
 const { auth } = require("../src/services/firebase");
 const service = require("../src/services/firestoreService");
 const local = require("../src/services/localRecovery");
-beforeEach(() => { jest.clearAllMocks(); auth.currentUser = { uid: "owner" }; });
+const { setActiveWallet } = require("../src/services/walletSession");
+beforeEach(() => { jest.clearAllMocks(); auth.currentUser = { uid: "owner" }; setActiveWallet("owner"); });
+afterEach(() => setActiveWallet(null));
 test("account changes during a server fetch cannot return another account's delayed records", async () => {
   let complete; sdk.getDocsFromServer.mockReturnValue(new Promise((resolve) => { complete = resolve; }));
   const pending = service.fetchCoupons("owner"); auth.currentUser = { uid: "other" }; complete({ docs: [] });
@@ -22,6 +24,16 @@ test("invalid server records report an error without replacing the wallet or its
 test("late subscription callbacks are ignored after account changes", () => {
   const next = jest.fn(); service.subscribeCoupons("owner", next, jest.fn());
   auth.currentUser = { uid: "other" };
+  sdk.onSnapshot.mock.calls[0][2]({ docs: [], metadata: { fromCache: false } });
+  expect(next).not.toHaveBeenCalled(); expect(local.captureSnapshot).not.toHaveBeenCalled();
+});
+test("wallet changes reject delayed reads and suppress previous wallet subscription callbacks", async () => {
+  let complete; sdk.getDocsFromServer.mockReturnValue(new Promise((resolve) => { complete = resolve; }));
+  const pending = service.fetchCoupons("owner");
+  const next = jest.fn(); service.subscribeCoupons("owner", next, jest.fn());
+  setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner"] });
+  complete({ docs: [] });
+  await expect(pending).rejects.toThrow("쿠폰함");
   sdk.onSnapshot.mock.calls[0][2]({ docs: [], metadata: { fromCache: false } });
   expect(next).not.toHaveBeenCalled(); expect(local.captureSnapshot).not.toHaveBeenCalled();
 });

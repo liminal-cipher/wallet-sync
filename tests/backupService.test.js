@@ -7,7 +7,8 @@ jest.mock("../src/services/firebase", () => ({ auth: { currentUser: { uid: "owne
 jest.mock("../src/services/firestoreService", () => ({ addCoupon: jest.fn(), fetchCoupons: jest.fn() }));
 jest.mock("../src/services/imageService", () => ({ imageDataUri: jest.fn(), importImage: jest.fn(), uploadOriginal: jest.fn() }));
 jest.mock("../src/services/localRecovery", () => ({ captureSnapshot: jest.fn(), readLocal: jest.fn(), writeLocal: jest.fn(), serialise: (value) => JSON.parse(JSON.stringify(value)) }));
-const { restoreRecords, exportWallet } = require("../src/services/backupService");
+const { restoreRecords, exportWallet, previewRestore, restoreWalletBackup } = require("../src/services/backupService");
+const { setActiveWallet } = require("../src/services/walletSession");
 const { catalogue } = require("./catalogueFixtures");
 const { validateBackupRecords, parseBackup } = require("../src/utils/backupData");
 const { toDate } = require("../src/utils/dateUtils");
@@ -16,9 +17,23 @@ const local = require("../src/services/localRecovery");
 const images = require("../src/services/imageService");
 const record = (barcodeNumber) => ({ brand: "Coffee", kind: "voucher", barcodeType: "code128", barcodeNumber, expiryDay: "2027-01-01", isUsed: false });
 beforeEach(() => {
+  setActiveWallet("owner");
   jest.clearAllMocks(); firestore.fetchCoupons.mockResolvedValue([]); firestore.addCoupon.mockReset().mockResolvedValue({ id: "new" });
   local.captureSnapshot.mockResolvedValue(); local.writeLocal.mockResolvedValue();
   local.readLocal.mockResolvedValue(null);
+});
+afterEach(() => setActiveWallet(null));
+test("a restore preview cannot be applied to a different wallet", async () => {
+  const plan = await previewRestore([record("private")]);
+  setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner"] });
+  await expect(restoreWalletBackup(plan)).rejects.toThrow("쿠폰함");
+  expect(firestore.addCoupon).not.toHaveBeenCalled();
+});
+test("a wallet change during restore stops writes and preserves the original checkpoint", async () => {
+  local.writeLocal.mockImplementationOnce(async () => { setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner"] }); });
+  await expect(restoreRecords([record("private")])).rejects.toThrow("쿠폰함");
+  expect(firestore.addCoupon).not.toHaveBeenCalled();
+  expect(local.writeLocal).toHaveBeenCalledTimes(1);
 });
 test("storage failure before checkpoint prevents any restore writes", async () => {
   local.writeLocal.mockRejectedValueOnce(new Error("Storage full"));

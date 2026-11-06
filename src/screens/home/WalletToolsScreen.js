@@ -3,6 +3,7 @@ import { View, Text, Switch, ActivityIndicator, Platform } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Page, Field, Button, Choices, ui } from "../../components/WalletUi";
 import { auth } from "../../services/firebase";
+import { getWalletScope } from "../../services/walletSession";
 import { fetchCoupons, restoreCoupon } from "../../services/firestoreService";
 import { readLocal } from "../../services/localRecovery";
 import { exportWallet, pickBackup, previewRestore, restoreWalletBackup } from "../../services/backupService";
@@ -33,7 +34,7 @@ export default function WalletToolsScreen({ navigation }) {
   const [days, setDays] = useState("7,3,0");
   const [savedSettings, setSavedSettings] = useState(null);
   const now = useCalendarClock();
-  const forecast = reminderSchedule(uid, coupons, savedSettings, now);
+  const forecast = reminderSchedule(uid, coupons, savedSettings, now, getWalletScope(uid).walletId);
   const [exportFrom, setExportFrom] = useState("1");
   const [exportTo, setExportTo] = useState("");
   const pending = useRef(false);
@@ -82,7 +83,7 @@ export default function WalletToolsScreen({ navigation }) {
   };
   const restore = () => run(async () => {
     if (auth.currentUser?.uid !== uid || plan.uid !== uid) throw new Error("계정이 변경됐습니다. 백업을 다시 선택해 주세요.");
-    if (!(await confirmation.confirm("추가 복원", `${plan.additions.length}개를 현재 로그인한 계정에 추가합니다. 기존 쿠폰은 덮어쓰지 않으며 ${plan.skipped}개 중복은 건너뜁니다. 휴지통 쿠폰은 휴지통에 복원됩니다.${includePreferences && plan.brandPreferences ? " 브랜드 설정은 기존 설정과 합칩니다." : " 브랜드 설정은 변경하지 않습니다."}`))) return;
+    if (!(await confirmation.confirm("추가 복원", `${plan.additions.length}개를 ${getWalletScope(uid).name}에 추가합니다. 기존 쿠폰은 덮어쓰지 않으며 ${plan.skipped}개 중복은 건너뜁니다. 휴지통 쿠폰은 휴지통에 복원됩니다.${includePreferences && plan.brandPreferences ? " 브랜드 설정은 기존 설정과 합칩니다." : " 브랜드 설정은 변경하지 않습니다."}`))) return;
     const result = await restoreWalletBackup(plan, { expectedUid: uid, includePreferences, onProgress: (done, total) => setMessage(`${done}/${total}개 복원 중...`) });
     setPlan(null); setMessage(`${result.added}개 복원, ${result.skipped}개 중복 건너뜀.${result.preferencesRestored ? " 브랜드 설정을 합쳤습니다." : ""}${result.localOnly ? ` 원본 ${result.localOnly}개는 이 기기에만 보관됐습니다.` : ""}`);
     await load();

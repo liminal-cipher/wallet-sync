@@ -5,6 +5,9 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./src/services/firebase";
 import { startCouponNotificationSync } from "./src/services/couponNotificationSync";
+import { getWalletScope, observeWalletScope, setActiveWallet } from "./src/services/walletSession";
+import { startWalletSession } from "./src/services/sharedWalletService";
+import SharedWalletScreen from "./src/screens/home/SharedWalletScreen";
 
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import RegisterScreen from "./src/screens/auth/RegisterScreen";
@@ -19,15 +22,22 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
+  const [scope, setScope] = useState(() => getWalletScope(null));
 
   useEffect(() => {
     const stopNotificationSync = startCouponNotificationSync();
+    const stopScope = observeWalletScope(setScope);
+    let stopWallet = () => {};
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      stopWallet();
+      setInitializing(true);
       setUser(currentUser);
-      setInitializing(false);
+      if (currentUser) stopWallet = startWalletSession(currentUser.uid, () => setInitializing(false));
+      else { setActiveWallet(null); setInitializing(false); }
     });
     return () => {
       unsubscribe();
+      stopWallet(); stopScope();
       stopNotificationSync();
     };
   }, []);
@@ -43,7 +53,7 @@ export default function App() {
   return (
     <NavigationContainer>
       {user ? (
-        <Stack.Navigator key={user.uid}>
+        <Stack.Navigator key={`${user.uid}:${scope.walletId || "personal"}:${scope.generation}`}>
           <Stack.Screen
             name="Home"
             component={HomeScreen}
@@ -56,6 +66,7 @@ export default function App() {
           />
           <Stack.Screen name="WalletTools" component={WalletToolsScreen} options={{ headerShown: false }} />
           <Stack.Screen name="CouponHistory" component={CouponHistoryScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="SharedWallet" component={SharedWalletScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       ) : (
         <Stack.Navigator>

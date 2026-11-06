@@ -23,6 +23,7 @@ const firestore = require("../src/services/firestoreService");
 const local = require("../src/services/localRecovery");
 const images = require("../src/services/imageService");
 const { auth } = require("../src/services/firebase");
+const { setActiveWallet } = require("../src/services/walletSession");
 const { Alert } = require("../src/utils/feedback");
 const { catalogue } = require("./catalogueFixtures");
 const { normaliseCatalogueMetadata } = require("../src/utils/catalogueModel");
@@ -32,13 +33,14 @@ const field = (label) => renderer.root.findAllByType("TextInput").find((node) =>
 const button = (label) => renderer.root.findAllByType("TouchableOpacity").find((node) => node.findAllByType("Text").some((text) => text.children.join("") === label));
 const accessibleButton = (label) => renderer.root.findAllByType("TouchableOpacity").find((node) => node.props.accessibilityLabel === label);
 beforeEach(() => {
+  setActiveWallet("owner");
   jest.clearAllMocks(); navigation = { goBack: jest.fn() };
   auth.currentUser = { uid: "owner" }; localValues = new Map();
   local.readLocal.mockImplementation(async (_uid, section) => localValues.get(section) || null);
   local.writeLocal.mockImplementation(async (_uid, section, value) => localValues.set(section, value));
   images.uploadOriginal.mockResolvedValue({ image: null, localOnly: false });
 });
-afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); renderer = null; });
+afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); renderer = null; setActiveWallet(null); });
 
 test("a malformed draft is preserved and cannot be applied to crash the editor", async () => {
   localValues.set("draft:new", { form: null, revision: 0 });
@@ -91,8 +93,23 @@ test("rapid save taps submit once, and a network failure leaves the draft and in
   expect(firestore.addCoupon).toHaveBeenCalledWith(expect.objectContaining({ barcodeNumber: "AB-12 34" }));
   await act(async () => { rejectSave(new Error("Network unavailable")); await flush(); });
   expect(field("바코드 원문 (공백·하이픈도 보존)").props.value).toBe("AB-12 34");
-  expect(local.writeLocal).toHaveBeenLastCalledWith("owner", "draft:new", expect.objectContaining({ form: expect.objectContaining({ barcodeNumber: "AB-12 34" }) }));
+  expect(local.writeLocal).toHaveBeenLastCalledWith("owner", "draft:new", expect.objectContaining({ form: expect.objectContaining({ barcodeNumber: "AB-12 34" }) }), expect.objectContaining({ walletId: null }));
   expect(navigation.goBack).not.toHaveBeenCalled(); expect(button("등록하기").props.disabled).toBe(false);
+});
+test("switching wallets while saving cannot submit a private form into the shared wallet", async () => {
+  let complete;
+  images.uploadOriginal.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  await act(async () => {
+    field("브랜드·상품명 / 이벤트명").props.onChangeText("Private coffee");
+    field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("private-123");
+  });
+  await act(async () => { button("등록하기").props.onPress(); await flush(); });
+  setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner"] });
+  await act(async () => { complete({ image: null, localOnly: false }); await flush(); });
+  expect(firestore.addCoupon).not.toHaveBeenCalled();
+  expect(localValues.get("draft:new").form.brand).toBe("Private coffee");
+  expect(navigation.goBack).not.toHaveBeenCalled();
 });
 test("editing submits the observed revision and clears its own draft only after success", async () => {
   firestore.getCoupon.mockResolvedValue({ id: "coupon-1", brand: "Coffee", barcodeNumber: "AB-12 34", expiryDay: "2027-01-01", revision: 3 });
@@ -101,8 +118,19 @@ test("editing submits the observed revision and clears its own draft only after 
   await act(async () => { field("브랜드·상품명 / 이벤트명").props.onChangeText("Bakery"); });
   await act(async () => { await button("변경 저장").props.onPress(); });
   expect(firestore.updateCoupon).toHaveBeenCalledWith("coupon-1", expect.objectContaining({ brand: "Bakery", barcodeNumber: "AB-12 34" }), 3);
-  expect(local.writeLocal).toHaveBeenLastCalledWith("owner", "draft:coupon-1", null);
+  expect(local.writeLocal).toHaveBeenLastCalledWith("owner", "draft:coupon-1", null, expect.objectContaining({ walletId: null }));
   expect(navigation.goBack).toHaveBeenCalledTimes(1);
+});
+test("editing the other member's coupon preserves its image without claiming a local copy exists", async () => {
+  const image = { id: "12345678-1234-4234-8234-123456789abc", ownerId: "guest", walletId: "shared", mime: "image/png", cloudPath: null };
+  setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner", "guest"] });
+  firestore.getCoupon.mockResolvedValue({ id: "shared-coupon", brand: "Coffee", barcodeNumber: "AB-12 34", expiryDay: "2027-01-01", revision: 1, image });
+  firestore.updateCoupon.mockResolvedValue(); images.imageDataUri.mockRejectedValueOnce(new Error("No local image"));
+  images.uploadOriginal.mockResolvedValueOnce({ image, localOnly: true });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: { params: { id: "shared-coupon" } } })); await flush(); });
+  await act(async () => button("변경 저장").props.onPress());
+  expect(firestore.updateCoupon).toHaveBeenCalledWith("shared-coupon", expect.objectContaining({ image }), 1);
+  expect(Alert.alert).toHaveBeenCalledWith("사진 원본은 별도 보관", expect.stringContaining("등록한 기기"));
 });
 test("the unchanged editor and its recovery draft preserve catalogue metadata on ordinary edits", async () => {
   const metadata = normaliseCatalogueMetadata(catalogue());
@@ -112,7 +140,7 @@ test("the unchanged editor and its recovery draft preserve catalogue metadata on
   await act(async () => { field("브랜드·상품명 / 이벤트명").props.onChangeText("My own title"); });
   await act(async () => { await button("변경 저장").props.onPress(); });
   expect(firestore.updateCoupon).toHaveBeenCalledWith("catalogue-coupon", expect.objectContaining({ brand: "My own title", catalogue: metadata }), 3);
-  expect(local.writeLocal).toHaveBeenLastCalledWith("owner", "draft:catalogue-coupon", expect.objectContaining({ form: expect.objectContaining({ catalogue: metadata }) }));
+  expect(local.writeLocal).toHaveBeenLastCalledWith("owner", "draft:catalogue-coupon", expect.objectContaining({ form: expect.objectContaining({ catalogue: metadata }) }), expect.objectContaining({ walletId: null }));
   const draft = local.writeLocal.mock.calls.at(-1)[2];
   await act(async () => { renderer.unmount(); });
   local.readLocal.mockImplementation(async (_uid, section) => section === "draft:catalogue-coupon" ? draft : null);

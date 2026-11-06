@@ -2,6 +2,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { reminderSchedule } from "../utils/reminderSchedule";
 import { DEFAULT_REMINDERS } from "./reminderSettings";
+import { getWalletScope } from "./walletSession";
 
 // Configure foreground notification presentation
 Notifications.setNotificationHandler({
@@ -59,13 +60,13 @@ const isCouponNotification = (notification) => {
   return data?.type === NOTIFICATION_TYPE || typeof data?.couponId === "string";
 };
 
-const createExpiryRequests = (userId, coupons, now, settings) =>
-  reminderSchedule(userId, coupons, settings, now).map(({ couponId, brand, daysBefore, date }) => ({
-    identifier: `${NOTIFICATION_TYPE}:${userId}:${couponId}:${daysBefore}`,
+const createExpiryRequests = (userId, coupons, now, settings, walletId) =>
+  reminderSchedule(userId, coupons, settings, now, walletId).map(({ couponId, brand, daysBefore, date }) => ({
+    identifier: `${NOTIFICATION_TYPE}:${userId}:${walletId ? `wallet:${walletId}:` : ""}${couponId}:${daysBefore}`,
     content: {
       title: daysBefore ? `쿠폰 만료 ${daysBefore}일 전` : "쿠폰 만료 D-Day",
       body: `'${brand}' ${daysBefore ? `만료까지 ${daysBefore}일 남았습니다.` : "오늘 만료됩니다."}`,
-      data: { type: NOTIFICATION_TYPE, userId, couponId, scheduleKey: JSON.stringify([brand, date.getTime()]) },
+      data: { type: NOTIFICATION_TYPE, userId, couponId, ...(walletId ? { walletId } : {}), scheduleKey: JSON.stringify([brand, date.getTime()]) },
     },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date, channelId: NOTIFICATION_TYPE },
   }));
@@ -87,11 +88,12 @@ export const clearCouponNotifications = (userIdToKeep = null) => {
 
 export const reconcileCouponNotifications = (userId, coupons, settings = DEFAULT_REMINDERS) => {
   if (Platform.OS === "web" || !userId) return Promise.resolve();
+  const { walletId } = getWalletScope(userId);
   return enqueue(async () => {
     const { status } = await Notifications.getPermissionsAsync();
     const now = new Date();
     let requests = status === "granted"
-      ? createExpiryRequests(userId, coupons, now, settings)
+      ? createExpiryRequests(userId, coupons, now, settings, walletId)
       : [];
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     // Reserve space for other notification categories and schedule the nearest

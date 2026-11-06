@@ -6,6 +6,7 @@ import { auth } from "./firebase";
 import { validateImage } from "../utils/couponModel";
 import { MAX_IMAGE_BYTES, originalByteLength } from "../utils/inputLimits";
 import { openLocalDatabase } from "./localDatabase";
+import { getWalletScope, assertWalletScope } from "./walletSession";
 
 export { MAX_IMAGE_BYTES } from "../utils/inputLimits";
 const imageDb = () => openLocalDatabase("wallet-sync-images", "images");
@@ -23,6 +24,7 @@ async function webStore(key, blob) {
 export async function retainImage(asset) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("로그인이 필요합니다.");
+  const scope = getWalletScope(uid);
   const mime = asset.mimeType || "image/jpeg";
   if (!["image/jpeg", "image/png", "image/webp"].includes(mime)) throw new Error("JPEG·PNG·WebP 이미지를 선택해 주세요.");
   const id = Crypto.randomUUID();
@@ -38,7 +40,9 @@ export async function retainImage(asset) {
     await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
     await FileSystem.copyAsync({ from: asset.uri, to: `${directory}${id}` });
   }
-  return { id, ownerId: uid, mime, cloudPath: null };
+  if (auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다.");
+  assertWalletScope(scope);
+  return { id, ownerId: uid, mime, cloudPath: null, ...(scope.walletId ? { walletId: scope.walletId } : {}) };
 }
 function localUri(image) {
   validateImage(image);
@@ -46,7 +50,9 @@ function localUri(image) {
 }
 function requireImage(image) {
   validateImage(image);
-  if (!image || image.ownerId !== auth.currentUser?.uid) throw new Error("원본 이미지 계정을 확인해 주세요.");
+  const uid = auth.currentUser?.uid;
+  const scope = getWalletScope(uid);
+  if (!uid || !image || (image.walletId ? image.walletId !== scope.walletId : image.ownerId !== uid || scope.walletId)) throw new Error("원본 이미지 계정·쿠폰함을 확인해 주세요.");
 }
 async function remoteBytes(image) {
   requireImage(image);
@@ -58,16 +64,19 @@ async function remoteBytes(image) {
 }
 export async function imageDataUri(image) {
   requireImage(image);
+  const uid = auth.currentUser.uid;
+  const scope = getWalletScope(uid);
+  const assertCurrent = () => { requireImage(image); if (auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다."); assertWalletScope(scope); };
   if (Platform.OS !== "web") {
     if ((await FileSystem.getInfoAsync(localUri(image))).exists) {
       const content = await FileSystem.readAsStringAsync(localUri(image), { encoding: FileSystem.EncodingType.Base64 });
-      requireImage(image);
+      assertCurrent();
       return `data:${image.mime};base64,${content}`;
     }
     // React Native cannot construct Blob(ArrayBuffer); encode authenticated bytes
     // directly instead of losing cross-device originals at that boundary.
     const bytes = await remoteBytes(image);
-    requireImage(image);
+    assertCurrent();
     let binary = "";
     for (let offset = 0; offset < bytes.length; offset += 16384) binary += String.fromCharCode(...bytes.subarray(offset, offset + 16384));
     return `data:${image.mime};base64,${btoa(binary)}`;
@@ -79,7 +88,7 @@ export async function imageDataUri(image) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      try { requireImage(image); resolve(reader.result); } catch (error) { reject(error); }
+      try { assertCurrent(); resolve(reader.result); } catch (error) { reject(error); }
     };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
@@ -88,6 +97,9 @@ export async function imageDataUri(image) {
 export async function uploadOriginal(image) {
   if (!image) return { image: null, localOnly: false };
   requireImage(image);
+  const scope = getWalletScope(auth.currentUser.uid);
+  // Shared originals await the Drive adapter; never send them to a private bucket.
+  if (image.walletId) return { image, localOnly: true };
   if (image.cloudPath) return { image, localOnly: false };
   try {
     requireImage(image);
@@ -96,6 +108,7 @@ export async function uploadOriginal(image) {
     requireImage(image);
     originalByteLength(dataUri);
     const sha256 = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, dataUri);
+    assertWalletScope(scope);
     const storage = getStorage();
     storage.maxUploadRetryTime = 15000;
     storage.maxOperationRetryTime = 15000;
@@ -103,12 +116,14 @@ export async function uploadOriginal(image) {
     let existing;
     try { existing = await getMetadata(target); }
     catch (error) { if (error.code !== "storage/object-not-found") throw error; }
+    assertWalletScope(scope);
     if (existing) {
       if (existing.customMetadata?.sha256 !== sha256) throw new Error("원본 이미지 내용이 다릅니다.");
     } else {
       requireImage(image);
       await uploadString(target, dataUri, "data_url", { contentType: image.mime, customMetadata: { sha256 } });
     }
+    assertWalletScope(scope);
     return { image: { ...image, cloudPath }, localOnly: false };
   } catch { return { image, localOnly: true }; }
 }
@@ -116,12 +131,14 @@ export async function importImage(dataUri) {
   originalByteLength(dataUri);
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("로그인이 필요합니다.");
+  const scope = getWalletScope(uid);
   if (Platform.OS === "web") return retainImage({ uri: dataUri, mimeType: dataUri.slice(5, dataUri.indexOf(";")) });
   const mimeType = dataUri.slice(5, dataUri.indexOf(";"));
   const temporary = `${FileSystem.cacheDirectory}${Crypto.randomUUID()}`;
   try {
     await FileSystem.writeAsStringAsync(temporary, dataUri.split(",")[1], { encoding: FileSystem.EncodingType.Base64 });
     if (auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다.");
+    assertWalletScope(scope);
     return await retainImage({ uri: temporary, mimeType });
   } finally {
     // Only the temporary file created by this operation is removed.

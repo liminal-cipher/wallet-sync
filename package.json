@@ -12,7 +12,7 @@
     "check:android": "node scripts/check-android-build.cjs",
     "build:android:preview": "npm run check:android && npx eas-cli@25.2.0 build --platform android --profile preview",
     "eas-build-post-install": "node scripts/check-android-build.cjs",
-    "test:rules": "npx --yes --package=firebase-tools@15.34.0 -- firebase emulators:exec --only firestore,storage --project demo-wallet-sync-rules --config firebase.emulator.json \"jest --runInBand tests/firestore.rules.test.js tests/storage.rules.test.js\"",
+    "test:rules": "npx --yes --package=firebase-tools@15.34.0 -- firebase emulators:exec --only firestore,storage --project demo-wallet-sync-rules --config firebase.emulator.json \"jest --runInBand tests/firestore.rules.test.js tests/sharedWallet.test.js tests/storage.rules.test.js\"",
     "test:integration": "npx --yes --package=firebase-tools@15.34.0 -- firebase emulators:exec --only firestore,storage --project demo-wallet-sync-rules --config firebase.emulator.json \"jest --runInBand\""
   },
   "dependencies": {

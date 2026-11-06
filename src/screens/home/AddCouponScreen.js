@@ -9,6 +9,7 @@ import { prepareCatalogueForm } from "../../utils/catalogueForm";
 import { rememberBrand } from "../../services/brandPreferences";
 import { addCoupon, getCoupon, updateCoupon } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
+import { getWalletScope, assertWalletScope } from "../../services/walletSession";
 import { readLocal, writeLocal } from "../../services/localRecovery";
 import { retainImage, imageDataUri, uploadOriginal } from "../../services/imageService";
 import { recogniseImage } from "../../services/ocrService";
@@ -28,6 +29,7 @@ const initialForm = () => {
 export default function AddCouponScreen({ navigation, route }) {
   const id = route.params?.id;
   const uid = useRef(auth.currentUser?.uid).current;
+  const scope = useRef(getWalletScope(uid)).current;
   const section = `draft:${id || "new"}`;
   const [form, setForm] = useState(initialForm);
   const [revision, setRevision] = useState(0);
@@ -53,7 +55,7 @@ export default function AddCouponScreen({ navigation, route }) {
     setReady(false); setDirty(false); setDraft(null); setRevision(0); setForm(initialForm());
     (async () => {
       const record = id ? await getCoupon(id) : null;
-      const cached = validateCouponDraft(await readLocal(uid, section));
+      const cached = validateCouponDraft(await readLocal(uid, section, null, scope));
       if (!active) return;
       if (record) {
         setForm({ ...initialForm(), ...record, expiryDay: toDay(record.expiryDay || record.expiryDate) || "" });
@@ -65,7 +67,7 @@ export default function AddCouponScreen({ navigation, route }) {
   }, [id, uid, section]);
   useEffect(() => {
     if (!ready || !dirty || saved.current) return;
-    writeLocal(uid, section, { form, revision, savedAt: new Date().toISOString() }).catch(() =>
+    writeLocal(uid, section, { form, revision, savedAt: new Date().toISOString() }, scope).catch(() =>
       setError("입력 초안을 기기에 보관하지 못했습니다. 저장 공간을 확인해 주세요."));
   }, [form, revision, ready, dirty, uid, section]);
   useEffect(() => {
@@ -104,6 +106,7 @@ export default function AddCouponScreen({ navigation, route }) {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: false, quality: 1 });
       if (result.canceled) return;
+      assertWalletScope(scope);
       const asset = result.assets[0];
       const image = await retainImage(asset);
       change("image", image);
@@ -117,23 +120,31 @@ export default function AddCouponScreen({ navigation, route }) {
     saving.current = true; setBusy(true); setError("");
     try {
       if (uid !== auth.currentUser?.uid) throw new Error("계정이 변경됐습니다.");
+      assertWalletScope(scope);
       const data = normaliseCoupon(prepareCatalogueForm(form));
       if (!data.expiryDay) throw new Error("유효한 만료일을 입력해 주세요 (YYYY-MM-DD).");
       if (data.kind === "voucher") barcodeSvg(data.barcodeNumber, data.barcodeType);
       // Persist a final recovery draft before attempting the network write.
-      await writeLocal(uid, section, { form, revision, savedAt: new Date().toISOString() });
+      await writeLocal(uid, section, { form, revision, savedAt: new Date().toISOString() }, scope);
+      assertWalletScope(scope);
       const uploaded = await uploadOriginal(data.image);
+      assertWalletScope(scope);
       if (uid !== auth.currentUser?.uid) throw new Error("계정이 변경됐습니다.");
       if (id) await updateCoupon(id, { ...data, image: uploaded.image }, revision);
       else await addCoupon({ ...data, image: uploaded.image });
+      assertWalletScope(scope);
+      if (uid !== auth.currentUser?.uid) throw new Error("계정이 변경됐습니다.");
       saved.current = true;
       if (data.catalogue?.brandId) {
         try { await rememberBrand(uid, data.catalogue.brandId); }
         catch { Alert.alert("저장 완료", "쿠폰은 저장됐지만 최근 선택 브랜드를 기기에 보관하지 못했습니다."); }
       }
-      try { await writeLocal(uid, section, null); }
+      try { await writeLocal(uid, section, null, scope); }
       catch { Alert.alert("저장 완료", "쿠폰은 저장됐지만 기기 초안을 정리하지 못했습니다. 같은 쿠폰은 중복 등록되지 않습니다."); }
-      if (uploaded.localOnly) Alert.alert("원본은 이 기기에 보관됨", "쿠폰은 저장됐습니다. 원본 이미지의 클라우드 보관은 확인하지 못했습니다. 보관·복원에서 이미지 포함 JSON 백업을 별도로 저장해 주세요.");
+      assertWalletScope(scope);
+      if (uploaded.localOnly) Alert.alert(scope.walletId ? "사진 원본은 별도 보관" : "원본은 이 기기에 보관됨", scope.walletId
+        ? "쿠폰은 저장됐습니다. 공유 사진은 등록한 기기에서만 볼 수 있습니다. 사진을 등록한 기기에서 원본 포함 JSON 백업을 따로 보관해 주세요."
+        : "쿠폰은 저장됐습니다. 원본 이미지의 클라우드 보관은 확인하지 못했습니다. 보관·복원에서 이미지 포함 JSON 백업을 별도로 저장해 주세요.");
       navigation.goBack();
     } catch (e) { setError(e.message); }
     finally { saving.current = false; setBusy(false); }

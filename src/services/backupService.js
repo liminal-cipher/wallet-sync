@@ -15,11 +15,12 @@ import { barcodeSvg } from "../utils/barcodes";
 import { selectBackupRange } from "../utils/backupRange";
 import { catalogueDetailLines } from "../utils/catalogueDisplay";
 import { originalByteLength } from "../utils/inputLimits";
+import { getWalletScope, assertWalletScope } from "./walletSession";
 
-const assertAccount = (uid) => { if (!uid || auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다. 다시 시도해 주세요."); };
+const assertAccount = (uid, scope) => { if (scope) assertWalletScope(scope); if (!uid || auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다. 다시 시도해 주세요."); };
 const restoring = new Set();
-async function shareText(text, extension, mimeType, uid) {
-  assertAccount(uid);
+async function shareText(text, extension, mimeType, uid, scope) {
+  assertAccount(uid, scope);
   const name = `wallet-sync-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
   if (Platform.OS === "web") {
     const url = URL.createObjectURL(new Blob([text], { type: mimeType }));
@@ -31,33 +32,34 @@ async function shareText(text, extension, mimeType, uid) {
   // Keep the export in documents even when the share sheet is cancelled.
   const uri = `${FileSystem.documentDirectory}${name}`;
   await FileSystem.writeAsStringAsync(uri, text);
-  assertAccount(uid);
+  assertAccount(uid, scope);
   if (!(await Sharing.isAvailableAsync())) throw new Error(`파일은 앱 문서에 보관됐지만 공유를 지원하지 않습니다: ${name}`);
-  assertAccount(uid);
+  assertAccount(uid, scope);
   await Sharing.shareAsync(uri, { mimeType, dialogTitle: "쿠폰 백업 저장" });
 }
 export async function exportWallet(format, includeOriginals = true, sourceRecords = null, range = null, includePreferences = true, onWarning = () => {}) {
   if (!["json", "csv", "pdf"].includes(format)) throw new Error("지원하지 않는 내보내기 형식입니다.");
   const uid = auth.currentUser?.uid;
-  assertAccount(uid);
+  const scope = getWalletScope(uid);
+  assertAccount(uid, scope);
   const source = sourceRecords ?? await fetchCoupons(uid);
-  assertAccount(uid);
+  assertAccount(uid, scope);
   // Validate before JSON serialisation can turn non-finite amounts into null.
   const records = serialise(source.map((record) => ({ ...record, ...normaliseCoupon(record) })));
   if (sourceRecords === null) {
     // An optional device copy must not prevent rescuing data to an external file.
     try { await captureSnapshot(uid, records); }
     catch {
-      assertAccount(uid);
+      assertAccount(uid, scope);
       onWarning("기기 자동 사본을 저장하지 못했습니다. 파일 내보내기는 계속합니다. 파일을 별도 저장소에 보관해 주세요.");
     }
   }
-  assertAccount(uid);
+  assertAccount(uid, scope);
   const selected = selectBackupRange(records, range);
   if (selected.length > 2000) throw new Error("한 백업은 최대 2000개입니다. 시작·끝 번호를 조정해 나눠 내보내 주세요.");
   const portable = []; let originalBytes = 0;
   for (const record of selected) {
-    assertAccount(uid);
+    assertAccount(uid, scope);
     let original = null;
     if (format === "json" && includeOriginals && record.image) {
       original = await imageDataUri(record.image);
@@ -67,15 +69,15 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
     portable.push({ ...normaliseCoupon({ ...record, image: null }), deletedAt: record.deletedAt || null,
       ...(original ? { original } : {}), image: null });
   }
-  assertAccount(uid);
-  if (format === "csv") { const text = toCsv(portable); parseBackup(text, "csv"); return shareText(text, "csv", "text/csv", uid); }
+  assertAccount(uid, scope);
+  if (format === "csv") { const text = toCsv(portable); parseBackup(text, "csv"); return shareText(text, "csv", "text/csv", uid, scope); }
   if (format === "json") {
     const brandPreferences = includePreferences ? await loadBrandPreferences(uid) : null;
-    assertAccount(uid);
+    assertAccount(uid, scope);
     const text = JSON.stringify({ app: "wallet-sync", version: BACKUP_VERSION, exportedAt: new Date().toISOString(), source: sourceRecords === null ? "server" : "local-snapshot", records: portable, brandPreferences }, null, 2);
     // Validate our own size/format before offering an unusable backup.
     parseBackup(text, "json");
-    return shareText(text, "json", "application/json", uid);
+    return shareText(text, "json", "application/json", uid, scope);
   }
   const html = `<html><head><meta charset="utf-8"><style>body{font-family:sans-serif}article{page-break-inside:avoid;border:1px solid #ccc;padding:18px;margin:20px}svg{max-width:100%;height:100px}p{white-space:pre-wrap;word-break:break-all}</style></head><body><h1>WalletSync</h1>${portable.map((record) => {
     let barcode = "";
@@ -91,6 +93,7 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
       let cleanup;
       frame.onload = () => {
         try {
+          assertAccount(uid, scope);
           frame.contentWindow.addEventListener("afterprint", () => { clearTimeout(cleanup); frame.remove(); resolve(); }, { once: true });
           frame.contentWindow.focus(); frame.contentWindow.print();
           cleanup = setTimeout(() => { frame.remove(); resolve(); }, 60000);
@@ -100,9 +103,9 @@ export async function exportWallet(format, includeOriginals = true, sourceRecord
     });
   }
   const { uri } = await Print.printToFileAsync({ html });
-  assertAccount(uid);
+  assertAccount(uid, scope);
   if (!(await Sharing.isAvailableAsync())) throw new Error("이 기기는 PDF 공유를 지원하지 않습니다.");
-  assertAccount(uid);
+  assertAccount(uid, scope);
   return Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: ".pdf" });
 }
 export async function pickBackup() {
@@ -115,62 +118,65 @@ export async function pickBackup() {
 }
 export async function previewRestore(input) {
   const uid = auth.currentUser?.uid;
-  assertAccount(uid);
+  const scope = getWalletScope(uid);
+  assertAccount(uid, scope);
   const backup = validateRestoreInput(input, { localImages: true });
   const current = backup.records.length ? await fetchCoupons(uid) : [];
-  assertAccount(uid);
-  return { ...planRestore(backup.records, current), ...backup, uid };
+  assertAccount(uid, scope);
+  return { ...planRestore(backup.records, current), ...backup, uid, walletId: scope.walletId };
 }
 export const restoreRecords = (records, onProgress = () => {}) => restoreWalletBackup(records, { onProgress });
 export async function restoreWalletBackup(input, { onProgress = () => {}, includePreferences = false, expectedUid = auth.currentUser?.uid } = {}) {
   const uid = expectedUid;
-  assertAccount(uid);
+  const scope = getWalletScope(uid);
+  assertAccount(uid, scope);
+  if (input && Object.prototype.hasOwnProperty.call(input, "walletId") && input.walletId !== scope.walletId) throw new Error("쿠폰함이 변경됐습니다. 백업을 다시 선택해 주세요.");
   const backup = validateRestoreInput(input, { localImages: true });
   if (restoring.has(uid)) throw new Error("이미 복원 중입니다. 현재 작업이 끝난 뒤 다시 시도해 주세요.");
   restoring.add(uid);
   try {
     if (includePreferences && backup.brandPreferences) {
       mergePreferenceData(await loadBrandPreferences(uid), backup.brandPreferences);
-      assertAccount(uid);
+      assertAccount(uid, scope);
     }
     const current = backup.records.length ? await fetchCoupons(uid) : [];
-    assertAccount(uid);
+    assertAccount(uid, scope);
     if (backup.records.length) {
       await captureSnapshot(uid, current);
-      assertAccount(uid);
+      assertAccount(uid, scope);
     }
     const previous = await readLocal(uid, "restore");
-    assertAccount(uid);
+    assertAccount(uid, scope);
     if (previous) {
       validateRestoreSession(previous);
       await writeLocal(uid, "restore:previous", previous);
-      assertAccount(uid);
+      assertAccount(uid, scope);
     }
     // Persist the input and progress before any network mutation. A retry is additive.
     const session = { version: 2, startedAt: new Date().toISOString(), ...backup, includePreferences, completed: 0 };
     await writeLocal(uid, "restore", session);
-    assertAccount(uid);
+    assertAccount(uid, scope);
     const plan = planRestore(backup.records, current);
     let added = 0, skipped = plan.skipped, localOnly = 0;
     for (const record of plan.additions) {
-      assertAccount(uid);
+      assertAccount(uid, scope);
       try {
-        let image = record.image?.ownerId === uid ? record.image : null;
+        let image = (scope.walletId ? record.image?.walletId === scope.walletId : record.image?.ownerId === uid && !record.image?.walletId) ? record.image : null;
         if (record.original) {
           const retained = await importImage(record.original);
-          assertAccount(uid);
+          assertAccount(uid, scope);
           const uploaded = await uploadOriginal(retained);
-          assertAccount(uid);
+          assertAccount(uid, scope);
           image = uploaded.image;
           if (uploaded.localOnly) localOnly++;
         }
-        assertAccount(uid);
+        assertAccount(uid, scope);
         await addCoupon({ ...record, image }, { restore: true });
         added++;
-        assertAccount(uid);
+        assertAccount(uid, scope);
         session.completed = added;
         await writeLocal(uid, "restore", session);
-        assertAccount(uid);
+        assertAccount(uid, scope);
         onProgress(added, plan.additions.length);
       } catch (error) {
         if (error.code === "coupon/duplicate") { skipped++; continue; }
@@ -180,11 +186,11 @@ export async function restoreWalletBackup(input, { onProgress = () => {}, includ
     let preferencesRestored = false;
     if (includePreferences && backup.brandPreferences) {
       await mergeBrandPreferences(uid, backup.brandPreferences);
-      assertAccount(uid);
+      assertAccount(uid, scope);
       preferencesRestored = true;
     }
     await writeLocal(uid, "restore", null);
-    assertAccount(uid);
+    assertAccount(uid, scope);
     return { added, skipped, localOnly, preferencesRestored };
   } finally { restoring.delete(uid); }
 }

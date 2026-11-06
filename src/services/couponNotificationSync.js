@@ -2,6 +2,7 @@ import { AppState, Platform } from "react-native";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { subscribeCoupons } from "./firestoreService";
+import { getWalletScope, observeWalletScope } from "./walletSession";
 import { loadReminderSettings, observeReminderSettings } from "./reminderSettings";
 import {
   requestNotificationPermissions,
@@ -19,6 +20,7 @@ export const startCouponNotificationSync = () => {
   let latestCoupons = null;
   let stopCoupons = () => {};
   let permissionsReady = null;
+  let selectedWalletId = null;
   const reportError = (error) => console.error("Coupon notification sync error:", error);
 
   const refresh = async () => {
@@ -37,14 +39,15 @@ export const startCouponNotificationSync = () => {
     }
   };
 
-  const stopAuth = onAuthStateChanged(auth, (user) => {
+  const restart = (user, walletChanged = false) => {
     if (disposed) return;
     const currentGeneration = ++generation;
     stopCoupons();
     stopCoupons = () => {};
     userId = user?.uid || null;
+    selectedWalletId = userId ? getWalletScope(userId).walletId : null;
     latestCoupons = null;
-    clearCouponNotifications(userId).catch(reportError);
+    clearCouponNotifications(walletChanged ? null : userId).catch(reportError);
     if (userId) {
       stopCoupons = subscribeCoupons(userId, (coupons, metadata) => {
         if (disposed || currentGeneration !== generation) return;
@@ -55,6 +58,10 @@ export const startCouponNotificationSync = () => {
       }, reportError);
       refresh().catch(reportError);
     }
+  };
+  const stopAuth = onAuthStateChanged(auth, (user) => restart(user));
+  const stopWallet = observeWalletScope((scope) => {
+    if (userId && scope.uid === userId) restart({ uid: userId }, scope.walletId !== selectedWalletId);
   });
 
   const foreground = AppState.addEventListener("change", (state) => {
@@ -66,6 +73,7 @@ export const startCouponNotificationSync = () => {
     disposed = true;
     generation++;
     stopAuth();
+    stopWallet();
     stopCoupons();
     stopSettings();
     foreground.remove();

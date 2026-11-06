@@ -7,11 +7,25 @@ const storage = require("firebase/storage");
 const files = require("expo-file-system/legacy");
 const { auth } = require("../src/services/firebase");
 const { imageDataUri, uploadOriginal } = require("../src/services/imageService");
+const { setActiveWallet } = require("../src/services/walletSession");
 const image = { id: "12345678-1234-4234-8234-123456789abc", ownerId: "owner", mime: "image/png", cloudPath: null };
 beforeEach(() => {
+  setActiveWallet("owner");
   auth.currentUser = { uid: "owner" };
   jest.clearAllMocks(); files.getInfoAsync.mockResolvedValue({ exists: true }); files.readAsStringAsync.mockResolvedValue("YWJj");
   storage.getMetadata.mockReset().mockRejectedValue({ code: "storage/object-not-found" }); storage.uploadString.mockResolvedValue();
+});
+afterEach(() => setActiveWallet(null));
+test("shared originals are isolated by wallet and never uploaded to private Firebase Storage", async () => {
+  const shared = { ...image, ownerId: "guest", walletId: "shared" };
+  await expect(imageDataUri(shared)).rejects.toThrow("쿠폰함");
+  setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner", "guest"] });
+  expect(await imageDataUri(shared)).toBe("data:image/png;base64,YWJj");
+  await expect(uploadOriginal(shared)).resolves.toEqual({ image: shared, localOnly: true });
+  expect(storage.uploadString).not.toHaveBeenCalled();
+  await expect(imageDataUri(image)).rejects.toThrow("쿠폰함");
+  files.readAsStringAsync.mockImplementationOnce(async () => { setActiveWallet("owner"); return "YWJj"; });
+  await expect(imageDataUri(shared)).rejects.toThrow("쿠폰함");
 });
 test("the image adapter only imports functions exported by the installed Firebase SDK", () => {
   const actual = jest.requireActual("firebase/storage");

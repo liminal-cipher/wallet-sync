@@ -40,7 +40,9 @@ export function validateImage(image) {
   if (typeof image.id !== "string" || !/^[a-f0-9-]{36}$/i.test(image.id) || typeof image.ownerId !== "string" ||
       !/^[A-Za-z0-9_-]{1,128}$/.test(image.ownerId) || !["image/jpeg", "image/png", "image/webp"].includes(image.mime) ||
       (image.cloudPath && image.cloudPath !== `originals/${image.ownerId}/${image.id}`)) throw new Error("원본 이미지 참조가 올바르지 않습니다.");
-  return { id: image.id, ownerId: image.ownerId, mime: image.mime, cloudPath: image.cloudPath || null };
+  if (image.walletId !== undefined && (typeof image.walletId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(image.walletId) || image.cloudPath)) throw new Error("공유 원본 이미지 참조가 올바르지 않습니다.");
+  return { id: image.id, ownerId: image.ownerId, mime: image.mime, cloudPath: image.cloudPath || null,
+    ...(image.walletId ? { walletId: image.walletId } : {}) };
 }
 // Use the original payload, including spaces and hyphens, as the voucher identity.
 export function couponIdentity(coupon) {

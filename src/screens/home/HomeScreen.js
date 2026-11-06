@@ -22,6 +22,7 @@ import {
   deleteCoupon,
 } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
+import { getWalletScope } from "../../services/walletSession";
 import BarcodeRenderer from "../../components/BarcodeRenderer";
 import { getExpiryInfo, filterCoupons, toDate } from "../../utils/dateUtils";
 import useCalendarClock from "../../hooks/useCalendarClock";
@@ -291,7 +292,7 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>WalletSync</Text>
-          <Text style={styles.title}>내 쿠폰 지갑</Text>
+          <Text style={styles.title}>{getWalletScope(auth.currentUser?.uid).name}</Text>
         </View>
         <View style={styles.headerButtons}>
           <TouchableOpacity
@@ -308,6 +309,7 @@ export default function HomeScreen() {
 
       {/* Filter Tabs */}
       <View style={ui.row}>
+        <Button label="공유 쿠폰함" secondary onPress={() => navigation.navigate("SharedWallet")} />
         <Button label="보관·복원·알림" secondary onPress={() => navigation.navigate("WalletTools")} />
         {!!cacheNotice && <Text style={ui.note}>{cacheNotice}</Text>}
         {!!fetchError && <Text accessibilityRole="alert" style={ui.error}>목록 갱신 실패: {fetchError} 표시된 사본을 유지합니다.</Text>}

@@ -21,6 +21,7 @@ const { subscribeCoupons } = require("../src/services/firestoreService");
 const notifications = require("../src/services/notificationService");
 const { loadReminderSettings, observeReminderSettings } = require("../src/services/reminderSettings");
 const { startCouponNotificationSync } = require("../src/services/couponNotificationSync");
+const { setActiveWallet } = require("../src/services/walletSession");
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 let authChanged;
 let foregroundChanged;
@@ -30,6 +31,7 @@ let removeForeground;
 let stop;
 
 beforeEach(() => {
+  setActiveWallet("owner");
   jest.clearAllMocks();
   Platform.OS = "android";
   subscriptions = [];
@@ -54,7 +56,25 @@ beforeEach(() => {
   loadReminderSettings.mockResolvedValue({ enabled: true, hour: 9, minute: 0, days: [7, 3, 0] });
 });
 
-afterEach(() => { if (stop) stop(); stop = null; });
+afterEach(() => { if (stop) stop(); stop = null; setActiveWallet(null); });
+
+test("switching wallets clears old reminders and rejects their late callbacks", async () => {
+  stop = startCouponNotificationSync(); authChanged({ uid: "owner" });
+  setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner"] });
+  subscriptions[0].callback([{ id: "personal" }]);
+  subscriptions[1].callback([{ id: "shared" }]); await flush();
+  expect(subscriptions[0].unsubscribe).toHaveBeenCalled();
+  expect(notifications.clearCouponNotifications).toHaveBeenLastCalledWith(null);
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledTimes(1);
+  expect(notifications.reconcileCouponNotifications).toHaveBeenCalledWith("owner", [{ id: "shared" }], expect.anything());
+});
+test("initialising a private session preserves scheduled reminders until a confirmed snapshot arrives", async () => {
+  setActiveWallet(null); stop = startCouponNotificationSync(); authChanged({ uid: "owner" });
+  setActiveWallet("owner");
+  subscriptions.at(-1).callback([], { fromCache: true }); await flush();
+  expect(notifications.clearCouponNotifications.mock.calls.every(([uid]) => uid === "owner")).toBe(true);
+  expect(notifications.reconcileCouponNotifications).not.toHaveBeenCalled();
+});
 
 test("an unconfirmed empty cache cannot cancel previously scheduled reminders", async () => {
   stop = startCouponNotificationSync(); authChanged({ uid: "owner" });
