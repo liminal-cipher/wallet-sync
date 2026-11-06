@@ -65,8 +65,9 @@ This enables email/password sign-in through the
 It does not create an application user. Verify the enabled provider after
 deployment; configuration in the repository alone does not enable sign-in.
 
-Before deploying Firestore rules, create the `(default)` database in Standard
-edition and Native mode, in the selected region. Confirm the region first:
+The configuration targets the `(default)` database in `asia-northeast3` (Seoul),
+using Standard edition and Native mode. Before creating it in another project,
+review the configured region:
 [Firestore database locations cannot be changed after creation](https://firebase.google.com/docs/firestore/locations).
 Then apply the rules to that same project:
 
