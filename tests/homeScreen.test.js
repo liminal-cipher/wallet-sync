@@ -23,14 +23,17 @@ const { create, act } = require("react-test-renderer");
 const Home = require("../src/screens/home/HomeScreen").default;
 const server = require("../src/services/firestoreService");
 const local = require("../src/services/localRecovery");
+const { Alert } = require("../src/utils/feedback");
+const { setActiveWallet } = require("../src/services/walletSession");
 const record = (id, extra = {}) => ({ id, userId: "owner", brand: id, barcodeNumber: id, expiryDay: "2026-11-01", ...extra });
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 let renderer, receive, fail;
 beforeEach(() => {
+  setActiveWallet("owner");
   jest.clearAllMocks(); local.readLocal.mockResolvedValue([]);
   server.subscribeCoupons.mockImplementation((_uid, next, error) => { receive = next; fail = error; return jest.fn(); });
 });
-afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); });
+afterEach(async () => { if (renderer) await act(async () => renderer.unmount()); setActiveWallet(null); });
 const mount = async () => act(async () => { renderer = create(React.createElement(Home)); await flush(); });
 test("live data supersedes an older in-flight refresh, and connection recovery clears the error", async () => {
   await mount();
@@ -56,4 +59,14 @@ test("search and sorting are wired into the rendered wallet", async () => {
   expect(renderer.root.findByType("FlatList").props.data.map((r) => r.id)).toEqual(["soon", "later"]);
   await act(async () => renderer.root.findByType("TextInput").props.onChangeText("주말"));
   expect(renderer.root.findByType("FlatList").props.data.map((r) => r.id)).toEqual(["soon"]);
+});
+test("a native deletion confirmation left open cannot delete from another wallet", async () => {
+  await mount(); await act(async () => receive([record("same-id")], { fromCache: false }));
+  const button = renderer.root.findAllByType("TouchableOpacity").find((node) => node.findAllByType("Text").some((text) => text.children.join("") === "삭제"));
+  await act(async () => button.props.onPress());
+  const confirm = Alert.alert.mock.calls[0][2].find((entry) => entry.style === "destructive");
+  setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner"] });
+  await act(async () => confirm.onPress());
+  expect(server.deleteCoupon).not.toHaveBeenCalled();
+  expect(Alert.alert).toHaveBeenLastCalledWith("이동 실패", expect.stringContaining("쿠폰함"));
 });

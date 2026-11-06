@@ -1,5 +1,5 @@
 import {
-  collection, getDocs, getDocsFromServer, getDoc, doc, query, where, onSnapshot, runTransaction,
+  collection, getDocs, getDocsFromServer, getDoc, getDocFromServer, doc, query, where, onSnapshot, runTransaction,
 } from "firebase/firestore";
 import * as Crypto from "expo-crypto";
 import { db, auth } from "./firebase";
@@ -62,6 +62,7 @@ const duplicateError = (record) => {
   error.code = "coupon/duplicate";
   return error;
 };
+const conflictError = () => Object.assign(new Error("다른 기기에서 변경된 쿠폰입니다. 최신 목록에서 다시 열어 확인해 주세요. 입력 초안은 유지됩니다."), { code: "coupon/conflict" });
 export const addCoupon = async (input, options = {}) => {
   const uid = requireUid();
   const scope = getWalletScope(uid);
@@ -112,10 +113,10 @@ export const updateCoupon = async (id, patch, expectedRevision) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists() || !belongsToScope(snapshot.data(), scope)) throw new Error("쿠폰을 찾을 수 없습니다.");
     const current = snapshot.data();
-    if ((current.revision || 0) !== (observed.revision || 0)) throw new Error("다른 기기에서 변경됐습니다. 최신 목록에서 다시 시도해 주세요.");
+    if ((current.revision || 0) !== (observed.revision || 0)) throw conflictError();
     const revision = current.revision || 0;
     if (expectedRevision !== undefined && expectedRevision !== revision) {
-      throw new Error("다른 기기에서 변경된 쿠폰입니다. 뒤로 갔다가 다시 열어 확인해 주세요. 입력 초안은 유지됩니다.");
+      throw conflictError();
     }
     const data = normaliseCoupon({ ...current, ...patch });
     if (!validImageOwner(data.image, scope)) throw new Error("다른 계정·쿠폰함의 원본 이미지입니다.");
@@ -135,6 +136,23 @@ export const updateCoupon = async (id, patch, expectedRevision) => {
       updatedAt: new Date(), revision: revision + 1,
       ...(scope.walletId ? { updatedBy: uid } : {}),
     });
+  }).catch(async (error) => {
+    assertScope(scope);
+    // An immutable history entry can cause rules to reject a competing commit
+    // before Firestore reports its stale transaction. Diagnose without retrying
+    // the write or adopting a newer revision on the user's behalf.
+    if (["permission-denied", "failed-precondition", "aborted"].includes(error.code)) {
+      let latest;
+      try { latest = await getDocFromServer(ref); }
+      catch (readError) {
+        assertScope(scope);
+        if (scope.walletId && readError.code === "permission-denied") throw new Error("공유 쿠폰함에 접근할 수 없습니다. 참여 상태를 확인해 주세요. 입력 초안은 유지됩니다.");
+        throw error;
+      }
+      assertScope(scope);
+      if (latest.exists() && (latest.data().revision || 0) !== (observed.revision || 0)) throw conflictError();
+    }
+    throw error;
   });
 };
 export const deleteCoupon = (id, revision) => updateCoupon(id, { deletedAt: new Date() }, revision);

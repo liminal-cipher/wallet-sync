@@ -6,8 +6,11 @@ import { fetchCouponHistory, getCoupon, restoreCouponVersion } from "../../servi
 import { toDay, toDate } from "../../utils/dateUtils";
 import ConfirmationDialog, { useConfirmation } from "../../components/ConfirmationDialog";
 import CatalogueDetails from "../../components/CatalogueDetails";
+import { auth } from "../../services/firebase";
+import { getWalletScope, assertWalletScope } from "../../services/walletSession";
 
 export default function CouponHistoryScreen({ navigation, route }) {
+  const scope = useRef(getWalletScope(auth.currentUser?.uid)).current;
   const [versions, setVersions] = useState([]);
   const [current, setCurrent] = useState(null);
   const [error, setError] = useState("");
@@ -23,7 +26,10 @@ export default function CouponHistoryScreen({ navigation, route }) {
     if (pending.current || !current) return;
     if (!(await confirmation.confirm("이 버전으로 복원", "현재 상태도 새 이력으로 남깁니다. 브랜드·바코드·만료일·사용 상태·첨부·휴지통 상태가 선택한 버전으로 돌아갑니다."))) return;
     pending.current = true; setBusy(true); setError("");
-    try { await restoreCouponVersion(current.id, version, current.revision || 0); await load(); }
+    try {
+      if (auth.currentUser?.uid !== scope.uid) throw new Error("계정이 변경됐습니다.");
+      assertWalletScope(scope); await restoreCouponVersion(current.id, version, current.revision || 0); await load();
+    }
     catch (e) { setError(e.message); }
     finally { pending.current = false; setBusy(false); }
   };

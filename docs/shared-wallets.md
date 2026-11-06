@@ -46,6 +46,24 @@ skip duplicate identities and never transfer membership or overwrite existing
 coupons. JSON can include retrievable originals; it does not contain history.
 See [Recovery and Data Handling](recovery.md) for limits and failure behaviour.
 
+## Synchronisation Failure Handling
+
+| Failure | Retained state and recovery |
+| --- | --- |
+| Both members edit the same revision | One commit succeeds. The losing edit cannot overwrite it or replace its history. A server read distinguishes a stale commit from lost access, and the editor retains its draft. |
+| A successful save response is lost | The committed record and duplicate reservation remain. Retrying the same identity cannot create a second coupon; reload the server list to inspect the result. An error is not proof of rollback. |
+| Membership is revoked during a write | Rules reject the pending write at commit. The coupon and its history remain unchanged. |
+| A deletion dialogue outlives its wallet | The original account and wallet are checked again when confirming. It cannot delete a same-ID record in the newly selected wallet. |
+| A restore stops after some records were added | The complete input and checkpoint remain on the device. Retrying adds only missing identities; existing records are not overwritten. |
+| Cached data or an old listener arrives late | Wallet generations reject stale work. Unconfirmed empty caches do not replace recovery snapshots. |
+
+Transactions are never automatically rewritten against a newer revision to make
+a conflict disappear. History and trash have no client-side permanent deletion.
+These protections address application writes; they do not protect against every
+administrator action, account loss or device failure. Independent external
+backups remain necessary. Current portable backups omit revision history, and
+shared originals still require the Drive work described below.
+
 ## Image and Deployment Status
 
 Shared image references include `walletId`. Their originals remain on the device
@@ -78,3 +96,7 @@ history, private-data isolation, duplicate submissions, outsider access, expired
 and replaced codes, simultaneous acceptance, guest departure, removal and live
 session updates. Component and service tests cover invitations, confirmation,
 wallet-scoped recovery, interrupted operations and shared expiry reminders.
+Fault injection pauses a real emulator transaction before commit while the other
+member changes the coupon or revokes access. Another test loses the client reply
+after a successful commit and verifies safe retry. These are distinct from an
+actual two-device network and storage test, which remains an acceptance step.

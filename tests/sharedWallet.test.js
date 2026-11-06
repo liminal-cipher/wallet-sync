@@ -3,7 +3,19 @@ const path = require("path");
 const { createHash } = require("crypto");
 const { initializeTestEnvironment } = require("@firebase/rules-unit-testing");
 const { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, writeBatch, setLogLevel } = require("firebase/firestore");
-let mockDb, mockUid;
+let mockDb, mockUid, mockBeforeCommit, mockLoseCommitReply;
+jest.mock("firebase/firestore", () => {
+  const actual = jest.requireActual("firebase/firestore");
+  return { ...actual, runTransaction: async (database, operation, options) => {
+    const result = await actual.runTransaction(database, async (transaction) => {
+      const value = await operation(transaction);
+      if (mockBeforeCommit) await mockBeforeCommit();
+      return value;
+    }, options);
+    if (mockLoseCommitReply) { mockLoseCommitReply = false; throw new Error("Commit reply lost"); }
+    return result;
+  } };
+});
 jest.mock("../src/services/firebase", () => ({ get db() { return mockDb; }, auth: { get currentUser() { return mockUid ? { uid: mockUid } : null; } } }));
 jest.mock("expo-crypto", () => ({ randomUUID: () => require("crypto").randomUUID(), CryptoDigestAlgorithm: { SHA256: "sha256" },
   digestStringAsync: async (_algorithm, text) => require("crypto").createHash("sha256").update(text).digest("hex") }));
@@ -40,7 +52,7 @@ integration("two-person shared wallets", () => {
       host, port: Number(port), rules: fs.readFileSync(path.join(__dirname, "../firestore.rules"), "utf8"),
     } });
   });
-  beforeEach(async () => { await environment.clearFirestore(); await signIn("owner"); });
+  beforeEach(async () => { mockBeforeCommit = null; mockLoseCommitReply = false; await environment.clearFirestore(); await signIn("owner"); });
   afterAll(async () => { setActiveWallet(null); await environment?.cleanup(); });
   test("own accounts share use state, history and trash without exposing personal coupons", async () => {
     await coupons.addCoupon(input("private"));
@@ -165,5 +177,52 @@ integration("two-person shared wallets", () => {
       await updateDoc(doc(ownerDb, "wallets", id), { memberIds: ["owner"], inviteHash: null, updatedAt: new Date() });
       await waitForWallet(null);
     } finally { stop(); }
+  });
+  test("an edit already in flight cannot overwrite the other member's committed edit", async () => {
+    const id = await create(); const ref = await coupons.addCoupon(input()); await inviteGuest(id); await signIn("owner", id);
+    let release, reached;
+    const blocked = new Promise((resolve) => { reached = resolve; });
+    const gate = new Promise((resolve) => { release = resolve; });
+    mockBeforeCommit = async () => { reached(); await gate; };
+    const pending = coupons.updateCoupon(ref.id, { brand: "Owner edit" }, 1);
+    const rejected = expect(pending).rejects.toThrow("다른 기기");
+    try {
+      await blocked;
+      const guestDb = environment.authenticatedContext("guest").firestore();
+      const guestRef = doc(guestDb, "wallets", id, "coupons", ref.id);
+      const original = (await getDoc(guestRef)).data(); const batch = writeBatch(guestDb);
+      batch.set(doc(guestRef, "history", "1"), { record: original, userId: "guest", savedAt: new Date() });
+      batch.update(guestRef, { isUsed: true, updatedBy: "guest", revision: 2, updatedAt: new Date() });
+      await batch.commit();
+    } finally { mockBeforeCommit = null; release(); }
+    await rejected;
+    expect(await coupons.getCoupon(ref.id)).toMatchObject({ brand: "Coffee", isUsed: true, revision: 2, updatedBy: "guest" });
+    const history = await coupons.fetchCouponHistory(ref.id);
+    expect(history).toHaveLength(1); expect(history[0].record).toMatchObject({ isUsed: false, revision: 1 });
+  });
+  test("revoking membership while a write is in flight leaves the coupon and history unchanged", async () => {
+    const id = await create(); const ref = await coupons.addCoupon(input()); await inviteGuest(id);
+    let release, reached;
+    const blocked = new Promise((resolve) => { reached = resolve; });
+    const gate = new Promise((resolve) => { release = resolve; });
+    mockBeforeCommit = async () => { reached(); await gate; };
+    const pending = coupons.deleteCoupon(ref.id, 1);
+    const rejected = expect(pending).rejects.toThrow();
+    try {
+      await blocked;
+      const ownerDb = environment.authenticatedContext("owner").firestore();
+      await updateDoc(doc(ownerDb, "wallets", id), { memberIds: ["owner"], inviteHash: null, updatedAt: new Date() });
+    } finally { mockBeforeCommit = null; release(); }
+    await rejected; await signIn("owner", id);
+    expect(await coupons.getCoupon(ref.id)).toMatchObject({ revision: 1, deletedAt: null });
+    expect(await coupons.fetchCouponHistory(ref.id)).toEqual([]);
+  });
+  test("losing a successful save reply cannot duplicate the record on retry", async () => {
+    const id = await create(); mockLoseCommitReply = true;
+    await expect(coupons.addCoupon(input())).rejects.toThrow("Commit reply lost");
+    await expect(coupons.addCoupon(input())).rejects.toThrow("같은");
+    await inviteGuest(id);
+    const records = await coupons.fetchCoupons("guest"); expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ brand: "Coffee", revision: 1, deletedAt: null });
   });
 });

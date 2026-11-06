@@ -56,7 +56,9 @@ function requireImage(image) {
 }
 async function remoteBytes(image) {
   requireImage(image);
-  if (!image.cloudPath) throw new Error("이 기기에 원본이 없습니다. 이미지가 포함된 JSON 백업을 복원해 주세요.");
+  if (!image.cloudPath) throw new Error(image.walletId
+    ? "이 기기에 공유 사진 원본이 없습니다. 사진을 등록한 기기에서 확인하고 원본 포함 JSON 백업을 보관해 주세요."
+    : "이 기기에 원본이 없습니다. 이미지가 포함된 JSON 백업을 복원해 주세요.");
   const storage = getStorage();
   storage.maxOperationRetryTime = 15000;
   // Authenticated reads: do not publish permanent download-token URLs.

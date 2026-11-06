@@ -3,7 +3,7 @@ import { View, Text, Switch, ActivityIndicator, Platform } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Page, Field, Button, Choices, ui } from "../../components/WalletUi";
 import { auth } from "../../services/firebase";
-import { getWalletScope } from "../../services/walletSession";
+import { getWalletScope, assertWalletScope } from "../../services/walletSession";
 import { fetchCoupons, restoreCoupon } from "../../services/firestoreService";
 import { readLocal } from "../../services/localRecovery";
 import { exportWallet, pickBackup, previewRestore, restoreWalletBackup } from "../../services/backupService";
@@ -18,6 +18,7 @@ import useCalendarClock from "../../hooks/useCalendarClock";
 
 export default function WalletToolsScreen({ navigation }) {
   const uid = useRef(auth.currentUser?.uid).current;
+  const scope = useRef(getWalletScope(uid)).current;
   const [tab, setTab] = useState("backup");
   const [coupons, setCoupons] = useState([]);
   const [copies, setCopies] = useState([]);
@@ -68,7 +69,10 @@ export default function WalletToolsScreen({ navigation }) {
   const run = async (operation) => {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError(""); setMessage("");
-    try { await operation(); }
+    try {
+      if (auth.currentUser?.uid !== uid) throw new Error("계정이 변경됐습니다.");
+      assertWalletScope(scope); await operation();
+    }
     catch (e) { setError(e.message); }
     finally { pending.current = false; setBusy(false); }
   };
@@ -84,6 +88,7 @@ export default function WalletToolsScreen({ navigation }) {
   const restore = () => run(async () => {
     if (auth.currentUser?.uid !== uid || plan.uid !== uid) throw new Error("계정이 변경됐습니다. 백업을 다시 선택해 주세요.");
     if (!(await confirmation.confirm("추가 복원", `${plan.additions.length}개를 ${getWalletScope(uid).name}에 추가합니다. 기존 쿠폰은 덮어쓰지 않으며 ${plan.skipped}개 중복은 건너뜁니다. 휴지통 쿠폰은 휴지통에 복원됩니다.${includePreferences && plan.brandPreferences ? " 브랜드 설정은 기존 설정과 합칩니다." : " 브랜드 설정은 변경하지 않습니다."}`))) return;
+    assertWalletScope(scope);
     const result = await restoreWalletBackup(plan, { expectedUid: uid, includePreferences, onProgress: (done, total) => setMessage(`${done}/${total}개 복원 중...`) });
     setPlan(null); setMessage(`${result.added}개 복원, ${result.skipped}개 중복 건너뜀.${result.preferencesRestored ? " 브랜드 설정을 합쳤습니다." : ""}${result.localOnly ? ` 원본 ${result.localOnly}개는 이 기기에만 보관됐습니다.` : ""}`);
     await load();
@@ -138,7 +143,7 @@ export default function WalletToolsScreen({ navigation }) {
         await restorePreviousBrandPreferences(uid); setMessage("브랜드 설정을 이전 사본으로 되돌렸습니다.");
       })} />
       <Text style={ui.heading}>이 기기의 자동 사본</Text>
-      <Text style={ui.note}>서버에서 확인한 최근 상태를 계정별로 보관합니다. 기기 분실·앱 삭제·브라우저 저장소 삭제까지 보호하려면 JSON 파일을 별도 저장해야 합니다. 수정 취소는 각 쿠폰의 수정 이력을 이용하세요.</Text>
+      <Text style={ui.note}>서버에서 확인한 최근 상태를 계정·쿠폰함별로 보관합니다. 기기 분실·앱 삭제·브라우저 저장소 삭제까지 보호하려면 JSON 파일을 별도 저장해야 합니다. 수정 취소는 각 쿠폰의 수정 이력을 이용하세요.</Text>
       {!copies.length && <Text style={ui.note}>아직 자동 사본이 없습니다.</Text>}
       {copies.map((copy, index) => <View key={`${copy.savedAt}:${index}`} style={ui.card}>
         <Text style={ui.note}>{new Date(copy.savedAt).toLocaleString("ko-KR")} · {copy.records.length}개</Text>

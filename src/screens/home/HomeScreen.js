@@ -22,7 +22,7 @@ import {
   deleteCoupon,
 } from "../../services/firestoreService";
 import { auth } from "../../services/firebase";
-import { getWalletScope } from "../../services/walletSession";
+import { getWalletScope, assertWalletScope } from "../../services/walletSession";
 import BarcodeRenderer from "../../components/BarcodeRenderer";
 import { getExpiryInfo, filterCoupons, toDate } from "../../utils/dateUtils";
 import useCalendarClock from "../../hooks/useCalendarClock";
@@ -37,6 +37,7 @@ import CatalogueDetails from "../../components/CatalogueDetails";
 import { findBrand } from "../../utils/brandCatalogue";
 
 export default function HomeScreen() {
+  const scope = useRef(getWalletScope(auth.currentUser?.uid)).current;
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -142,6 +143,8 @@ export default function HomeScreen() {
     locks.current.add(coupon.id); setPending([...locks.current]);
     try {
       const nextStatus = !coupon.isUsed;
+      if (auth.currentUser?.uid !== scope.uid) throw new Error("계정이 변경됐습니다.");
+      assertWalletScope(scope);
       await updateCoupon(coupon.id, { isUsed: nextStatus }, coupon.revision || 0);
     } catch (error) {
       Alert.alert("변경 실패", error.message);
@@ -163,6 +166,8 @@ export default function HomeScreen() {
             if (locks.current.has(coupon.id)) return;
             locks.current.add(coupon.id); setPending([...locks.current]);
             try {
+              if (auth.currentUser?.uid !== scope.uid) throw new Error("계정이 변경됐습니다.");
+              assertWalletScope(scope);
               await deleteCoupon(coupon.id, coupon.revision || 0);
             } catch (error) {
               Alert.alert("이동 실패", error.message);
@@ -245,7 +250,9 @@ export default function HomeScreen() {
 
         <Text style={styles.expiryText}>만료일: {formattedDate}</Text>
         {item.catalogue && <CatalogueDetails record={item} />}
-        {item.image && !item.image.cloudPath && <Text style={ui.note}>원본은 등록한 기기에 보관돼 있습니다. 수정 후 저장하면 클라우드 보관을 다시 시도합니다.</Text>}
+        {item.image && !item.image.cloudPath && <Text style={ui.note}>{item.image.walletId
+          ? "공유 사진은 현재 등록한 기기에서만 볼 수 있습니다. 사진을 등록한 기기에서 원본 포함 JSON 백업을 보관해 주세요."
+          : "원본은 등록한 기기에 보관돼 있습니다. 수정 후 저장하면 클라우드 보관을 다시 시도합니다."}</Text>}
         {item.kind !== "external" && !!item.conditions && <Text style={ui.note}>{item.conditions}</Text>}
         <View style={ui.row}>
           <Button label="수정" secondary disabled={pending.includes(item.id)} onPress={() => navigation.navigate("AddCoupon", { id: item.id })} />
