@@ -14,7 +14,7 @@ import { readLocal, writeLocal } from "../../services/localRecovery";
 import { retainImage, imageDataUri, uploadOriginal } from "../../services/imageService";
 import { recogniseImage } from "../../services/ocrService";
 import { parseVoucherText } from "../../utils/voucherParser";
-import { toDay, daysRemaining } from "../../utils/dateUtils";
+import { toDate, toDay, daysRemaining } from "../../utils/dateUtils";
 import { BARCODE_TYPES, PROVIDERS, normaliseCoupon } from "../../utils/couponModel";
 import { validateCouponDraft } from "../../utils/couponDraft";
 import { barcodeSvg } from "../../utils/barcodes";
@@ -152,11 +152,13 @@ export default function AddCouponScreen({ navigation, route }) {
     finally { saving.current = false; setBusy(false); }
   };
   const remaining = daysRemaining(form.expiryDay, now);
+  // Drafts store UTC ISO timestamps; show them in the device's local time.
+  const draftSavedAt = toDate(draft?.savedAt)?.toLocaleString("ko-KR");
   return <Page title={id ? "쿠폰 수정" : "쿠폰·이벤트 등록"} navigation={navigation}>
     {!ready && !error && <ActivityIndicator color="#6366F1" />}
     {!!error && <Text accessibilityRole="alert" style={ui.error}>{error}</Text>}
     {draft && <View style={ui.card}>
-      <Text style={ui.note}>저장하지 못한 입력 초안이 있습니다. ({draft.savedAt?.slice(0, 16)})</Text>
+      <Text style={ui.note}>저장하지 못한 입력 초안이 있습니다.{draftSavedAt ? ` (${draftSavedAt} 저장)` : ""}</Text>
       <Button label="입력 초안 복원" secondary disabled={busy} onPress={() => {
         setForm({ ...initialForm(), ...draft.form }); setRevision(draft.revision || 0); setDirty(true); setDraft(null);
       }} />

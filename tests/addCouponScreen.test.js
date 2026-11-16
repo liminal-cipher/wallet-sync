@@ -70,10 +70,19 @@ test.each([
   expect(local.writeLocal).not.toHaveBeenCalled();
 });
 
+test("a draft's save time is shown in local time rather than as a UTC timestamp", async () => {
+  const savedAt = "2026-11-16T10:17:00.000Z";
+  localValues.set("draft:new", { form: { brand: "Coffee" }, revision: 0, savedAt });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  const notice = renderer.root.findAllByType("Text").map((node) => node.children.join("")).find((text) => text.startsWith("저장하지 못한 입력 초안"));
+  expect(notice).toBe(`저장하지 못한 입력 초안이 있습니다. (${new Date(savedAt).toLocaleString("ko-KR")} 저장)`);
+  expect(notice).not.toContain("T10:17");
+});
 test("unfinished text and amount buffers remain recoverable, including older drafts without a timestamp", async () => {
   const draft = { revision: 0, form: { brand: "", barcodeNumber: "", expiryDay: "2026-", sourceUrl: "https://", catalogueMoneyInput: { faceValue: "10x" } } };
   localValues.set("draft:new", draft);
   await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  expect(renderer.root.findAllByType("Text").some((node) => node.children.join("") === "저장하지 못한 입력 초안이 있습니다.")).toBe(true);
   await act(async () => button("입력 초안 복원").props.onPress());
   expect(field("만료일 (YYYY-MM-DD)").props.value).toBe("2026-");
   expect(field("브랜드·상품명 / 이벤트명").props.value).toBe("");
