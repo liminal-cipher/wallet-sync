@@ -79,6 +79,22 @@ test("unfinished text and amount buffers remain recoverable, including older dra
   expect(field("브랜드·상품명 / 이벤트명").props.value).toBe("");
   expect(localValues.get("draft:new").form.catalogueMoneyInput.faceValue).toBe("10x");
 });
+test("a new coupon starts without an expiry date and cannot be saved until one is entered", async () => {
+  firestore.addCoupon.mockResolvedValue({ id: "new" });
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
+  expect(field("만료일 (YYYY-MM-DD)").props.value).toBe("");
+  await act(async () => {
+    field("브랜드·상품명 / 이벤트명").props.onChangeText("Coffee");
+    field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("AB-12 34");
+  });
+  await act(async () => { await button("등록하기").props.onPress(); });
+  expect(firestore.addCoupon).not.toHaveBeenCalled();
+  expect(renderer.root.findAllByType("Text").some((node) => node.props.accessibilityRole === "alert" && node.children.join("").includes("만료일"))).toBe(true);
+  await act(async () => { button("+7일").props.onPress(); });
+  expect(field("만료일 (YYYY-MM-DD)").props.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await act(async () => { await button("등록하기").props.onPress(); });
+  expect(firestore.addCoupon).toHaveBeenCalledTimes(1);
+});
 test("rapid save taps submit once, and a network failure leaves the draft and input intact", async () => {
   let rejectSave;
   firestore.addCoupon.mockReturnValue(new Promise((_resolve, reject) => { rejectSave = reject; }));
@@ -86,6 +102,7 @@ test("rapid save taps submit once, and a network failure leaves the draft and in
   await act(async () => {
     field("브랜드·상품명 / 이벤트명").props.onChangeText("Coffee");
     field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("AB-12 34");
+    field("만료일 (YYYY-MM-DD)").props.onChangeText("2027-01-01");
   });
   const save = button("등록하기").props.onPress;
   await act(async () => { save(); save(); await flush(); });
@@ -103,6 +120,7 @@ test("switching wallets while saving cannot submit a private form into the share
   await act(async () => {
     field("브랜드·상품명 / 이벤트명").props.onChangeText("Private coffee");
     field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("private-123");
+    field("만료일 (YYYY-MM-DD)").props.onChangeText("2027-01-01");
   });
   await act(async () => { button("등록하기").props.onPress(); await flush(); });
   setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner"] });
@@ -172,7 +190,7 @@ test("brand and product search registers a generated title without typing one", 
   await act(async () => { field("브랜드·메뉴 검색").props.onChangeText("폴바셋룽고"); });
   await act(async () => { accessibleButton("폴 바셋 룽고 선택").props.onPress(); });
   expect(field("브랜드·상품명 / 이벤트명").props.value).toBe("폴 바셋 · 룽고");
-  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("00-12 34"); });
+  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("00-12 34"); field("만료일 (YYYY-MM-DD)").props.onChangeText("2027-01-01"); });
   await act(async () => { await button("등록하기").props.onPress(); });
   expect(firestore.addCoupon).toHaveBeenCalledWith(expect.objectContaining({ brand: "폴 바셋 · 룽고", barcodeNumber: "00-12 34",
     catalogue: expect.objectContaining({ brandId: "paul-bassett", productId: "lungo", variantId: null }) }));
@@ -197,7 +215,7 @@ test("a retail amount voucher needs no menu and preserves zero separately from u
   expect(field("메뉴 검색")).toBeUndefined();
   await act(async () => { button("10,000원 입력").props.onPress(); });
   await act(async () => { field("남은 금액 (원, 수동 기록)").props.onChangeText("0"); });
-  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("V-00 123"); });
+  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("V-00 123"); field("만료일 (YYYY-MM-DD)").props.onChangeText("2027-01-01"); });
   await act(async () => { await button("등록하기").props.onPress(); });
   expect(firestore.addCoupon.mock.calls.at(-1)[0]).toMatchObject({ brand: "다이소 · 10,000원 금액권", catalogue: { productId: null, money: { faceValue: 10000, remainingBalance: 0, balanceMode: "manual", purchasePrice: null } } });
 });
@@ -206,7 +224,7 @@ test("invalid amount buffers block saving and remain in the recovery draft", asy
   await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
   await act(async () => { accessibleButton("다이소 선택").props.onPress(); });
   await act(async () => { field("액면금액 (원)").props.onChangeText("10x"); });
-  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("AB-1234"); });
+  await act(async () => { field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("AB-1234"); field("만료일 (YYYY-MM-DD)").props.onChangeText("2027-01-01"); });
   await act(async () => { await button("등록하기").props.onPress(); });
   expect(firestore.addCoupon).not.toHaveBeenCalled();
   expect(localValues.get("draft:new").form.catalogueMoneyInput.faceValue).toBe("10x");
@@ -239,7 +257,7 @@ test("failure to remember a saved brand does not resubmit or report the coupon a
   });
   await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: {} })); await flush(); });
   await act(async () => { accessibleButton("폴 바셋 선택").props.onPress(); });
-  await act(async () => { button("룽고").props.onPress(); field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("AB-1234"); });
+  await act(async () => { button("룽고").props.onPress(); field("바코드 원문 (공백·하이픈도 보존)").props.onChangeText("AB-1234"); field("만료일 (YYYY-MM-DD)").props.onChangeText("2027-01-01"); });
   await act(async () => { await button("등록하기").props.onPress(); });
   expect(firestore.addCoupon).toHaveBeenCalledTimes(1);
   expect(navigation.goBack).toHaveBeenCalledTimes(1);

@@ -21,11 +21,10 @@ import { barcodeSvg } from "../../utils/barcodes";
 import { Alert } from "../../utils/feedback";
 import useCalendarClock from "../../hooks/useCalendarClock";
 
-const initialForm = () => {
-  const date = new Date(); date.setDate(date.getDate() + 30);
-  return { kind: "voucher", brand: "", barcodeNumber: "", barcodeType: "code128", expiryDay: toDay(date),
-    provider: "other", conditions: "", sourceUrl: "", isUsed: false, image: null };
-};
+// New coupons start without an expiry date: a guessed default would be saved
+// silently whenever the printed date was overlooked.
+const initialForm = () => ({ kind: "voucher", brand: "", barcodeNumber: "", barcodeType: "code128", expiryDay: "",
+  provider: "other", conditions: "", sourceUrl: "", isUsed: false, image: null });
 export default function AddCouponScreen({ navigation, route }) {
   const id = route.params?.id;
   const uid = useRef(auth.currentUser?.uid).current;
@@ -184,7 +183,7 @@ export default function AddCouponScreen({ navigation, route }) {
         onChange={(provider) => changeFields({ provider, sourceUrl: PROVIDERS[provider].url })} disabled={busy || !ready} />
     </>}
     <Field label="만료일 (YYYY-MM-DD)" value={form.expiryDay} onChangeText={(v) => change("expiryDay", v)} placeholder="2026-12-31" maxLength={10} editable={ready && !busy} />
-    <Text style={remaining !== null && remaining < 0 ? ui.error : ui.note}>{remaining === null ? "유효한 날짜를 입력해 주세요." : remaining < 0 ? "이미 만료된 쿠폰입니다. 보관 목적으로 저장할 수 있습니다." : remaining === 0 ? "오늘 만료" : `D-${remaining}`}</Text>
+    <Text style={remaining !== null && remaining < 0 ? ui.error : ui.note}>{remaining === null ? (form.expiryDay ? "유효한 날짜를 입력해 주세요." : "쿠폰에 적힌 만료일을 입력하거나 아래에서 선택해 주세요.") : remaining < 0 ? "이미 만료된 쿠폰입니다. 보관 목적으로 저장할 수 있습니다." : remaining === 0 ? "오늘 만료" : `D-${remaining}`}</Text>
     <View style={ui.row}>{[7, 30, 90, 365].map((days) => <Button key={days} label={`+${days}일`} secondary disabled={busy || !ready}
       onPress={() => { const d = new Date(); d.setDate(d.getDate() + days); change("expiryDay", toDay(d)); }} />)}</View>
     <Field label="이용 조건·메모" value={form.conditions} onChangeText={(v) => change("conditions", v)} multiline maxLength={5000} editable={ready && !busy} />
