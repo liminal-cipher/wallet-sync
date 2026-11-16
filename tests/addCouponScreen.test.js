@@ -121,6 +121,22 @@ test("editing submits the observed revision and clears its own draft only after 
   expect(local.writeLocal).toHaveBeenLastCalledWith("owner", "draft:coupon-1", null, expect.objectContaining({ walletId: null }));
   expect(navigation.goBack).toHaveBeenCalledTimes(1);
 });
+test("a save conflict is announced beside the save button and keeps the edit", async () => {
+  firestore.getCoupon.mockResolvedValue({ id: "coupon-1", brand: "Coffee", barcodeNumber: "AB-12 34", expiryDay: "2027-01-01", revision: 3 });
+  const message = "다른 기기에서 변경된 쿠폰입니다. 최신 목록에서 다시 열어 확인해 주세요. 입력 초안은 유지됩니다.";
+  firestore.updateCoupon.mockRejectedValue(Object.assign(new Error(message), { code: "coupon/conflict" }));
+  await act(async () => { renderer = create(React.createElement(Screen, { navigation, route: { params: { id: "coupon-1" } } })); await flush(); });
+  await act(async () => { field("이용 조건·메모").props.onChangeText("Stale note"); });
+  await act(async () => { await button("변경 저장").props.onPress(); });
+  const nodes = renderer.root.findAll((node) => node.type === "Text" || node.type === "TouchableOpacity" || node.type === "TextInput");
+  const alerts = nodes.filter((node) => node.type === "Text" && node.props.accessibilityRole === "alert");
+  expect(alerts.map((node) => node.children.join(""))).toEqual([message]);
+  const position = (node) => nodes.indexOf(node);
+  expect(position(alerts[0])).toBeGreaterThan(position(field("공식 안내 페이지 (https)")));
+  expect(position(alerts[0])).toBeLessThan(position(button("변경 저장")));
+  expect(field("이용 조건·메모").props.value).toBe("Stale note");
+  expect(navigation.goBack).not.toHaveBeenCalled();
+});
 test("editing the other member's coupon preserves its image without claiming a local copy exists", async () => {
   const image = { id: "12345678-1234-4234-8234-123456789abc", ownerId: "guest", walletId: "shared", mime: "image/png", cloudPath: null };
   setActiveWallet("owner", { id: "shared", name: "Together", memberIds: ["owner", "guest"] });

@@ -39,6 +39,9 @@ export default function AddCouponScreen({ navigation, route }) {
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
+  // Save failures render beside the save button, where the person is looking
+  // at the end of a long form; loading and image errors stay at the top.
+  const [saveError, setSaveError] = useState("");
   const [preview, setPreview] = useState(null);
   const [camera, setCamera] = useState(false);
   const [smart, setSmart] = useState(false);
@@ -52,7 +55,7 @@ export default function AddCouponScreen({ navigation, route }) {
   useEffect(() => {
     let active = true;
     saved.current = false;
-    setReady(false); setDirty(false); setDraft(null); setRevision(0); setForm(initialForm());
+    setReady(false); setDirty(false); setDraft(null); setRevision(0); setForm(initialForm()); setSaveError("");
     (async () => {
       const record = id ? await getCoupon(id) : null;
       const cached = validateCouponDraft(await readLocal(uid, section, null, scope));
@@ -117,7 +120,7 @@ export default function AddCouponScreen({ navigation, route }) {
   };
   const save = async () => {
     if (saving.current || !ready || processing) return;
-    saving.current = true; setBusy(true); setError("");
+    saving.current = true; setBusy(true); setError(""); setSaveError("");
     try {
       if (uid !== auth.currentUser?.uid) throw new Error("계정이 변경됐습니다.");
       assertWalletScope(scope);
@@ -146,7 +149,7 @@ export default function AddCouponScreen({ navigation, route }) {
         ? "쿠폰은 저장됐습니다. Drive 원본 보관은 아직 완료되지 않았습니다. 사진을 등록한 기기에서 보관·복원 → Drive를 열어 원본 업로드를 다시 시도해 주세요. 등록한 기기의 원본은 유지됩니다."
         : "쿠폰은 저장됐습니다. 원본 이미지의 클라우드 보관은 확인하지 못했습니다. 보관·복원에서 이미지 포함 JSON 백업을 별도로 저장해 주세요.");
       navigation.goBack();
-    } catch (e) { setError(e.message); }
+    } catch (e) { setSaveError(e.message); }
     finally { saving.current = false; setBusy(false); }
   };
   const remaining = daysRemaining(form.expiryDay, now);
@@ -189,6 +192,7 @@ export default function AddCouponScreen({ navigation, route }) {
     {preview && <View style={ui.card}><Image source={{ uri: preview }} resizeMode="contain" style={{ height: 300, width: "100%" }} /><Text style={ui.note}>선택한 원본은 이 기기에 보관됐습니다. 저장 후 클라우드 업로드 결과를 확인해 주세요.</Text>
       <Button label="첨부 해제 (보관된 원본 유지)" secondary disabled={busy} onPress={() => change("image", null)} /></View>}
     {!!form.image && !preview && <Text style={ui.note}>원본 미리보기를 불러오지 못했습니다. 첨부 참조는 유지됩니다.</Text>}
+    {!!saveError && <Text accessibilityRole="alert" style={ui.error}>{saveError}</Text>}
     <Button label={busy ? "저장 중..." : id ? "변경 저장" : "등록하기"} onPress={save} disabled={busy || processing || !ready} />
     <Text style={ui.note}>미완성 입력은 계정별로 이 기기에 임시 저장됩니다. 기기 분실·앱 삭제에 대비하려면 보관·복원에서 JSON 백업을 외부에 저장해 주세요.</Text>
     <Modal visible={camera} onRequestClose={() => setCamera(false)}>
