@@ -86,19 +86,27 @@ export async function joinSharedWallet(input) {
   if (!/^[a-f0-9]{32}$/.test(code)) throw new Error("전달받은 초대 코드를 확인해 주세요.");
   const inviteRef = doc(db, "walletInvites", await codeHash(code));
   assertUid(uid);
-  await runTransaction(db, async (tx) => {
-    const profile = await tx.get(profileRef(uid));
-    const invitation = await tx.get(inviteRef);
-    assertUid(uid);
-    if (profile.exists()) throw new Error("이미 연결된 공유 쿠폰함이 있습니다. 기존 쿠폰함에서 먼저 나가 주세요.");
-    if (!invitation.exists()) throw new Error("초대 코드를 찾을 수 없습니다.");
-    const invite = invitation.data();
-    if (invite.ownerId === uid || invite.acceptedBy || timestamp(invite.expiresAt) <= Date.now()) throw new Error("사용할 수 없는 초대 코드입니다. 새 코드를 요청해 주세요.");
-    // The invite and membership change commit together; a second join is rejected.
-    tx.update(walletRef(invite.walletId), { memberIds: [invite.ownerId, uid], inviteHash: null, updatedAt: new Date() });
-    tx.update(inviteRef, { acceptedBy: uid });
-    tx.set(profileRef(uid), { walletId: invite.walletId });
-  });
+  try {
+    await runTransaction(db, async (tx) => {
+      const profile = await tx.get(profileRef(uid));
+      const invitation = await tx.get(inviteRef);
+      assertUid(uid);
+      if (profile.exists()) throw new Error("이미 연결된 공유 쿠폰함이 있습니다. 기존 쿠폰함에서 먼저 나가 주세요.");
+      if (!invitation.exists()) throw new Error("초대 코드를 찾을 수 없습니다.");
+      const invite = invitation.data();
+      if (invite.ownerId === uid || invite.acceptedBy || timestamp(invite.expiresAt) <= Date.now()) throw new Error("사용할 수 없는 초대 코드입니다. 새 코드를 요청해 주세요.");
+      // The invite and membership change commit together; a second join is rejected.
+      tx.update(walletRef(invite.walletId), { memberIds: [invite.ownerId, uid], inviteHash: null, updatedAt: new Date() });
+      tx.update(inviteRef, { acceptedBy: uid });
+      tx.set(profileRef(uid), { walletId: invite.walletId });
+    });
+  } catch (error) {
+    // The rules deny reads of unknown, expired or accepted invitations and joins
+    // through replaced codes, so these surface as permission errors rather than
+    // reaching the checks above. Raw rule diagnostics are not shown to people.
+    if (error.code !== "permission-denied") throw error;
+    throw Object.assign(new Error("초대 코드를 사용할 수 없습니다. 코드가 정확한지 확인하고, 만료됐거나 이미 사용된 코드라면 새 코드를 요청해 주세요."), { code: "wallet/invite-unavailable" });
+  }
 }
 
 export async function removeWalletMember(id) {

@@ -106,14 +106,20 @@ integration("two-person shared wallets", () => {
     }
     await expect(setDoc(doc(outsider, "users", "outsider", "settings", "sharedWallet"), { walletId: id })).rejects.toThrow();
   });
+  test("an unknown invitation code reports an actionable message instead of a rule diagnostic", async () => {
+    await create();
+    await signIn("guest");
+    await expect(wallets.joinSharedWallet("0".repeat(32))).rejects.toMatchObject({ code: "wallet/invite-unavailable", message: expect.stringContaining("새 코드를 요청") });
+    expect((await getDoc(doc(mockDb, "users", "guest", "settings", "sharedWallet"))).exists()).toBe(false);
+  });
   test("replacement invitations invalidate the old code and accepted codes cannot add a third member", async () => {
     const id = await create();
     const first = await wallets.createWalletInvitation(id);
     const second = await wallets.createWalletInvitation(id);
     await signIn("guest");
-    await expect(wallets.joinSharedWallet(first.code)).rejects.toThrow();
+    await expect(wallets.joinSharedWallet(first.code)).rejects.toMatchObject({ code: "wallet/invite-unavailable" });
     await wallets.joinSharedWallet(second.code);
-    await signIn("outsider"); await expect(wallets.joinSharedWallet(second.code)).rejects.toThrow();
+    await signIn("outsider"); await expect(wallets.joinSharedWallet(second.code)).rejects.toMatchObject({ code: "wallet/invite-unavailable" });
     await signIn("owner", id);
     await expect(wallets.createWalletInvitation(id)).rejects.toThrow("두 사람");
     expect((await getDoc(doc(mockDb, "wallets", id))).data().memberIds).toEqual(["owner", "guest"]);
@@ -121,9 +127,9 @@ integration("two-person shared wallets", () => {
   test("expired and revoked invitations cannot be accepted", async () => {
     const id = await create(); const expired = await wallets.createWalletInvitation(id);
     await environment.withSecurityRulesDisabled((context) => updateDoc(doc(context.firestore(), "walletInvites", hash(expired.code)), { expiresAt: new Date(0) }));
-    await signIn("guest"); await expect(wallets.joinSharedWallet(expired.code)).rejects.toThrow();
+    await signIn("guest"); await expect(wallets.joinSharedWallet(expired.code)).rejects.toMatchObject({ code: "wallet/invite-unavailable" });
     await signIn("owner", id); const revoked = await wallets.createWalletInvitation(id); await wallets.removeWalletMember(id);
-    await signIn("guest"); await expect(wallets.joinSharedWallet(revoked.code)).rejects.toThrow();
+    await signIn("guest"); await expect(wallets.joinSharedWallet(revoked.code)).rejects.toMatchObject({ code: "wallet/invite-unavailable" });
   });
   test("removal immediately blocks the former member while retaining their records and history", async () => {
     const id = await create(); await inviteGuest(id);
