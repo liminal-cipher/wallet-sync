@@ -9,12 +9,18 @@ const icons = {
   "baskin-robbins": require("../../assets/brands/baskin-robbins.png"), "paris-baguette": require("../../assets/brands/paris-baguette.png"),
   "tous-les-jours": require("../../assets/brands/tous-les-jours.png"), dunkin: require("../../assets/brands/dunkin.png"),
 };
+// Official assets that are white on transparency keep their original file and
+// use the background their source page places behind them.
+// Tous les Jours: #header background in https://www.tlj.co.kr/static/css/common.css.
+export const ICON_BACKGROUNDS = { "tous-les-jours": "#153A25" };
 export default function BrandIcon({ brand, size = 42 }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [brand?.iconId]);
   const source = icons[brand?.iconId];
-  return <View style={{ width: size, height: size, padding: 4, backgroundColor: "#FFF", borderRadius: 8, alignItems: "center", justifyContent: "center" }}>
-    {source && !failed ? <Image accessible={false} source={source} resizeMode="contain" style={{ width: "100%", height: "100%" }} onError={() => setFailed(true)} /> :
+  const showImage = source && !failed;
+  const backgroundColor = (showImage && ICON_BACKGROUNDS[brand.iconId]) || "#FFF";
+  return <View style={{ width: size, height: size, padding: 4, backgroundColor, borderRadius: 8, alignItems: "center", justifyContent: "center" }}>
+    {showImage ? <Image accessible={false} source={source} resizeMode="contain" style={{ width: "100%", height: "100%" }} onError={() => setFailed(true)} /> :
       <Text accessible={false} style={{ color: "#475569", fontWeight: "800", fontSize: 15 }}>{brand?.name?.slice(0, 2) || "쿠폰"}</Text>}
   </View>;
 }

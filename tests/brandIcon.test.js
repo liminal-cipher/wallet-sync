@@ -13,3 +13,14 @@ test("an unavailable official asset falls back to text, and another brand retrie
   expect(renderer.root.findAllByType("Image")).toHaveLength(1);
   await act(async () => { renderer.unmount(); });
 });
+test("a white-on-transparent logo keeps its source background, and its text fallback stays legible", async () => {
+  let renderer;
+  const tile = () => renderer.root.findByType("View").props.style.backgroundColor;
+  await act(async () => { renderer = create(React.createElement(BrandIcon, { brand: { name: "뚜레쥬르", iconId: "tous-les-jours" } })); });
+  expect(tile()).toBe("#153A25");
+  await act(async () => { renderer.root.findByType("Image").props.onError(); });
+  expect(tile()).toBe("#FFF");
+  await act(async () => { renderer.update(React.createElement(BrandIcon, { brand: { name: "스타벅스", iconId: "starbucks" } })); });
+  expect(tile()).toBe("#FFF");
+  await act(async () => { renderer.unmount(); });
+});
